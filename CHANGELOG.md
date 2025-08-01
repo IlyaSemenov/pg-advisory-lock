@@ -1,5 +1,11 @@
 # pg-advisory-lock
 
+## 1.1.0
+
+### Minor Changes
+
+- bf94952: Export convenience shortcuts `withLock`, `tryLock`.
+
 ## 1.0.1
 
 ### Patch Changes
