@@ -33,17 +33,19 @@ npm install pg-advisory-lock
 import { createAdvisoryLock } from "pg-advisory-lock"
 
 const databaseUrl = "postgresql://user:pass@localhost/db"
-const { createMutex, withLock, tryLock } = createAdvisoryLock(databaseUrl)
+const { createMutex, withLock } = createAdvisoryLock(databaseUrl)
 
-// Option 1: Using the convenience withLock method
 await withLock("my-resource", async () => {
   // Critical section - only one process can execute this at a time
   console.log("Doing exclusive work...")
   await someAsyncWork()
   // Lock is automatically released when function completes or throws
 })
+```
 
-// Option 2: Creating a mutex instance
+or use a mutex instance:
+
+```ts
 const mutex = createMutex("my-resource")
 await mutex.withLock(async () => {
   // Your exclusive code here
@@ -57,16 +59,9 @@ import { Pool } from "pg"
 import { createAdvisoryLock } from "pg-advisory-lock"
 
 const pool = new Pool({ connectionString: "postgresql://..." })
-const { createMutex, withLock, tryLock } = createAdvisoryLock(pool)
+const { createMutex, withLock } = createAdvisoryLock(pool)
 
-// Using the convenience method
 await withLock("my-resource", async () => {
-  // Your exclusive code here
-})
-
-// Or creating a mutex instance
-const mutex = createMutex("my-resource")
-await mutex.withLock(async () => {
   // Your exclusive code here
 })
 ```
@@ -76,7 +71,6 @@ await mutex.withLock(async () => {
 ```ts
 const { createMutex, tryLock } = createAdvisoryLock("postgresql://...")
 
-// Option 1: Using the convenience tryLock method
 const unlock = await tryLock("my-resource")
 if (unlock) {
   try {
@@ -90,16 +84,19 @@ if (unlock) {
 } else {
   console.log("Lock not available, skipping work")
 }
+```
 
-// Option 2: Using a mutex instance
+or use a mutex instance:
+
+```ts
 const mutex = createMutex("my-resource")
-const unlock2 = await mutex.tryLock()
-if (unlock2) {
+const unlock = await mutex.tryLock()
+if (unlock) {
   try {
     console.log("Lock acquired!")
     await someWork()
   } finally {
-    await unlock2()
+    await unlock()
   }
 } else {
   console.log("Lock not available, skipping work")
