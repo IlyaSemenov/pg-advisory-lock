@@ -1,6 +1,6 @@
 import { Pool } from "pg"
 
-import { Mutex } from "./mutex"
+import { AdvisoryLockMutex } from "./mutex"
 
 export function createAdvisoryLock(connection: string | Pool) {
   const pool = typeof connection === "string"
@@ -8,6 +8,6 @@ export function createAdvisoryLock(connection: string | Pool) {
     : connection
 
   return function createMutex(name: string) {
-    return new Mutex(pool, name)
+    return new AdvisoryLockMutex(pool, name)
   }
 }

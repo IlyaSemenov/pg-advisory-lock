@@ -2,7 +2,7 @@ import type { Pool } from "pg"
 
 import { createAdvisoryLockKey } from "./key"
 
-export class Mutex {
+export class AdvisoryLockMutex {
   private readonly pool: Pool
   private readonly lockKey: bigint
 
