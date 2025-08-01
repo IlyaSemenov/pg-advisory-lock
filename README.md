@@ -122,3 +122,9 @@ Returns:
 
 - An unlock function if the lock was acquired
 - `null` if the lock is not available
+
+### `createAdvisoryLockKey(str)`
+
+Generates a lock key from a string.
+
+Returns a 64-bit signed `BigInt`.
