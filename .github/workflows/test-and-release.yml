@@ -1,0 +1,74 @@
+name: Test and Release
+
+env:
+  # Sync with .changeset/config.json:baseBranch
+  MAIN_REF: refs/heads/main
+
+on:
+  push:
+    branches: ["**"]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  test-and-release:
+    name: Test and Release
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+        # Set health checks to wait until postgres has started
+        # See https://docs.github.com/en/actions/using-containerized-services/creating-postgresql-service-containers
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.5
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm run -r build
+
+      - name: Test packages
+        run: pnpm run -r test
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost
+
+      - name: Capture new release versions
+        if: ${{ github.ref == env.MAIN_REF }}
+        run: |
+          if pnpx @changesets/cli status --output=release.json; then
+            echo "CHANGED_PACKAGES=$(jq -r '.releases | map(.newVersion) | join(", ")' release.json)" >> "$GITHUB_ENV"
+            rm release.json
+          fi
+
+      - name: Create Release Pull Request or Publish to npm
+        if: ${{ github.ref == env.MAIN_REF }}
+        uses: changesets/action@v1
+        with:
+          publish: pnpm changeset publish
+          title: "Release ${{env.CHANGED_PACKAGES}}"
+          commit: "Release ${{env.CHANGED_PACKAGES}}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
