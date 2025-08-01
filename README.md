@@ -13,6 +13,12 @@ PostgreSQL advisory locks are application-level locks that use the database to c
 - Are automatically released when the database session ends
 - Can be used to implement distributed mutexes across multiple processes/servers
 
+## Use Cases
+
+- **Job Processing**: Ensure only one worker processes a specific job
+- **Database Migrations**: Coordinate schema changes across deployments
+- **Resource Initialization**: Ensure expensive resources are initialized only once
+
 ## Install
 
 ```sh
@@ -74,6 +80,14 @@ if (unlock) {
 }
 ```
 
+## Lock Names and IDs
+
+Lock names are converted to numeric IDs using a hash function (namely, 64-bit `djb2`). This means:
+
+- The same name will always produce the same lock ID
+- Different names will (very likely) produce different lock IDs
+- Lock names are case-sensitive
+
 ## API
 
 ### `createAdvisoryLock(connection)`
@@ -105,44 +119,6 @@ Returns the result of the function. The lock is released even if the function th
 Attempts to acquire the lock without blocking.
 
 Returns:
+
 - An unlock function if the lock was acquired
 - `null` if the lock is not available
-
-## Connection Management
-
-The library uses PostgreSQL connection pools for efficient connection management:
-
-- When you provide a connection string, an internal `pg.Pool` is created
-- When you provide a `pg.Pool`, it uses your existing pool
-- Each lock operation gets a connection from the pool
-- Connections are automatically returned to the pool after use
-
-## Lock Names and IDs
-
-Lock names are converted to numeric IDs using a hash function. This means:
-
-- The same name will always produce the same lock ID
-- Different names will (very likely) produce different lock IDs
-- Lock names are case-sensitive
-
-## Error Handling
-
-The library ensures proper cleanup in all scenarios:
-
-- Connections are always returned to the pool
-- Locks are released even if your code throws errors
-- Database connection errors are propagated to your code
-
-## Use Cases
-
-- **Job Processing**: Ensure only one worker processes a specific job
-- **Cache Warming**: Prevent multiple processes from warming the same cache
-- **Database Migrations**: Coordinate schema changes across deployments
-- **Resource Initialization**: Ensure expensive resources are initialized only once
-- **Rate Limiting**: Implement distributed rate limiting across multiple servers
-
-## Requirements
-
-- PostgreSQL database
-- Node.js with async/await support
-- `pg` package for PostgreSQL connectivity
