@@ -32,15 +32,21 @@ npm install pg-advisory-lock
 ```ts
 import { createAdvisoryLock } from "pg-advisory-lock"
 
-const createMutex = createAdvisoryLock("postgresql://user:pass@localhost/db")
-const mutex = createMutex("my-resource")
+const databaseUrl = "postgresql://user:pass@localhost/db"
+const { createMutex, withLock, tryLock } = createAdvisoryLock(databaseUrl)
 
-// Blocking lock - waits until lock is available
-await mutex.withLock(async () => {
+// Option 1: Using the convenience withLock method
+await withLock("my-resource", async () => {
   // Critical section - only one process can execute this at a time
   console.log("Doing exclusive work...")
   await someAsyncWork()
   // Lock is automatically released when function completes or throws
+})
+
+// Option 2: Creating a mutex instance
+const mutex = createMutex("my-resource")
+await mutex.withLock(async () => {
+  // Your exclusive code here
 })
 ```
 
@@ -51,9 +57,15 @@ import { Pool } from "pg"
 import { createAdvisoryLock } from "pg-advisory-lock"
 
 const pool = new Pool({ connectionString: "postgresql://..." })
-const createMutex = createAdvisoryLock(pool)
-const mutex = createMutex("my-resource")
+const { createMutex, withLock, tryLock } = createAdvisoryLock(pool)
 
+// Using the convenience method
+await withLock("my-resource", async () => {
+  // Your exclusive code here
+})
+
+// Or creating a mutex instance
+const mutex = createMutex("my-resource")
 await mutex.withLock(async () => {
   // Your exclusive code here
 })
@@ -62,10 +74,10 @@ await mutex.withLock(async () => {
 ### Non-blocking Lock Attempts
 
 ```ts
-const mutex = createMutex("my-resource")
+const { createMutex, tryLock } = createAdvisoryLock("postgresql://...")
 
-// Try to acquire lock without waiting
-const unlock = await mutex.tryLock()
+// Option 1: Using the convenience tryLock method
+const unlock = await tryLock("my-resource")
 if (unlock) {
   try {
     // We got the lock, do exclusive work
@@ -74,6 +86,20 @@ if (unlock) {
   } finally {
     // Always release the lock
     await unlock()
+  }
+} else {
+  console.log("Lock not available, skipping work")
+}
+
+// Option 2: Using a mutex instance
+const mutex = createMutex("my-resource")
+const unlock2 = await mutex.tryLock()
+if (unlock2) {
+  try {
+    console.log("Lock acquired!")
+    await someWork()
+  } finally {
+    await unlock2()
   }
 } else {
   console.log("Lock not available, skipping work")
@@ -92,11 +118,15 @@ Lock names are converted to numeric IDs using a hash function (namely, 64-bit `d
 
 ### `createAdvisoryLock(connection)`
 
-Creates a factory function for creating mutexes.
+Creates an advisory lock factory with methods for creating mutexes and acquiring locks.
 
 - `connection`: Either a PostgreSQL connection string or a `pg.Pool` instance
 
-Returns a function that creates mutex instances.
+Returns an object with:
+
+- `createMutex(name)`: Creates a mutex for the given resource name
+- `withLock(name, fn)`: Convenience method to acquire a lock and execute a function
+- `tryLock(name)`: Convenience method to attempt acquiring a lock without blocking
 
 ### `createMutex(name)`
 
@@ -105,6 +135,26 @@ Creates a mutex for the given resource name.
 - `name`: A string identifier for the resource to lock
 
 Returns a `Mutex` instance.
+
+### `withLock(name, fn)`
+
+Convenience method that creates a mutex and immediately executes a function with the lock.
+
+- `name`: A string identifier for the resource to lock
+- `fn`: An async function to execute while holding the lock
+
+Returns the result of the function. The lock is released even if the function throws an error.
+
+### `tryLock(name)`
+
+Convenience method that creates a mutex and attempts to acquire the lock without blocking.
+
+- `name`: A string identifier for the resource to lock
+
+Returns:
+
+- An unlock function if the lock was acquired
+- `undefined` if the lock is not available
 
 ### `mutex.withLock(fn)`
 

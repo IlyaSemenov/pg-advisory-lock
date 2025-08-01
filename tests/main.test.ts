@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest"
 
 import { databaseUrl, sleep } from "#test-utils"
 
-const createMutex = createAdvisoryLock(databaseUrl)
+const { createMutex, withLock, tryLock } = createAdvisoryLock(databaseUrl)
 
-describe("withLock", () => {
+describe("mutex.withLock", () => {
   it("executes function and releases lock", async () => {
     const mutex = createMutex("test-lock")
     let executed = false
@@ -96,7 +96,52 @@ describe("withLock", () => {
   })
 })
 
-describe("tryLock", () => {
+describe("convenience withLock", () => {
+  it("executes function and releases lock", async () => {
+    let executed = false
+
+    const result = await withLock("test-lock", async () => {
+      executed = true
+      return "success"
+    })
+
+    expect(executed).toBe(true)
+    expect(result).toBe("success")
+  })
+
+  it("releases lock even when function throws", async () => {
+    await expect(
+      withLock("test-lock", async () => {
+        throw new Error("test error")
+      }),
+    ).rejects.toThrow("test error")
+
+    // Should be able to acquire the lock again
+    const result = await withLock("test-lock", async () => "success")
+    expect(result).toBe("success")
+  })
+
+  it("prevents concurrent execution", async () => {
+    let log = ""
+
+    await Promise.all([
+      withLock("test-lock", async () => {
+        log += "a"
+        await new Promise(resolve => setTimeout(resolve, 50))
+        log += "b"
+      }),
+      sleep(1).then(() => withLock("test-lock", async () => {
+        log += "c"
+        await new Promise(resolve => setTimeout(resolve, 50))
+        log += "d"
+      })),
+    ])
+
+    expect(log).toBe("abcd")
+  })
+})
+
+describe("mutex.tryLock", () => {
   it("returns unlock function when lock is available", async () => {
     const mutex = createMutex("test-lock")
 
@@ -122,6 +167,57 @@ describe("tryLock", () => {
     // Clean up
     if (unlock1) {
       await unlock1()
+    }
+  })
+})
+
+describe("convenience tryLock", () => {
+  it("returns unlock function when lock is available", async () => {
+    const unlock = await tryLock("test-lock")
+    expect(unlock).not.toBeUndefined()
+
+    if (unlock) {
+      await unlock()
+    }
+  })
+
+  it("returns undefined when lock is not available", async () => {
+    // First lock should succeed
+    const unlock1 = await tryLock("test-lock")
+    expect(unlock1).not.toBeUndefined()
+
+    // Second lock should fail
+    const unlock2 = await tryLock("test-lock")
+    expect(unlock2).toBeUndefined()
+
+    // Clean up
+    if (unlock1) {
+      await unlock1()
+    }
+  })
+
+  it("works independently of mutex instances", async () => {
+    const mutex = createMutex("test-lock")
+
+    // Lock with convenience method
+    const unlock1 = await tryLock("test-lock")
+    expect(unlock1).not.toBeUndefined()
+
+    // Try to lock with mutex instance - should fail
+    const unlock2 = await mutex.tryLock()
+    expect(unlock2).toBeUndefined()
+
+    // Clean up
+    if (unlock1) {
+      await unlock1()
+    }
+
+    // Now mutex should be able to lock
+    const unlock3 = await mutex.tryLock()
+    expect(unlock3).not.toBeUndefined()
+
+    if (unlock3) {
+      await unlock3()
     }
   })
 })

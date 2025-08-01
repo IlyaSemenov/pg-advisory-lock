@@ -7,7 +7,17 @@ export function createAdvisoryLock(connection: string | Pool) {
     ? new Pool({ connectionString: connection })
     : connection
 
-  return function createMutex(name: string) {
+  function createMutex(name: string) {
     return new AdvisoryLockMutex(pool, name)
   }
+
+  async function withLock<T>(name: string, fn: () => PromiseLike<T>): Promise<T> {
+    return createMutex(name).withLock(fn)
+  }
+
+  async function tryLock(name: string): Promise<(() => Promise<void>) | undefined> {
+    return createMutex(name).tryLock()
+  }
+
+  return { createMutex, withLock, tryLock }
 }
