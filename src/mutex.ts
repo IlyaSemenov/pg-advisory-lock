@@ -2,6 +2,8 @@ import type { Pool } from "pg"
 
 import { createAdvisoryLockKey } from "./key"
 
+export type TryWithLockResult<T> = { acquired: false } | { acquired: true, result: T }
+
 export class AdvisoryLockMutex {
   private readonly pool: Pool
   private readonly lockKey: bigint
@@ -13,7 +15,6 @@ export class AdvisoryLockMutex {
 
   /**
    * Acquires the lock and executes the provided function.
-   * Automatically releases the lock when the function completes or throws.
    */
   async withLock<T>(fn: () => PromiseLike<T>): Promise<T> {
     const client = await this.pool.connect()
@@ -64,6 +65,27 @@ export class AdvisoryLockMutex {
       // On error, return client to pool and re-throw
       client.release()
       throw error
+    }
+  }
+
+  /**
+   * Attempts to acquire the lock without blocking and execute the provided function if successful.
+   *
+   * @returns
+   *  - `{ acquired: false }` if the lock is not available
+   *  - `{ acquired: true, result: T }` if the lock was acquired and the function executed
+   */
+  async tryWithLock<T>(fn: () => PromiseLike<T>): Promise<TryWithLockResult<T>> {
+    const unlock = await this.tryLock()
+    if (unlock) {
+      try {
+        const result = await fn()
+        return { acquired: true, result }
+      } finally {
+        await unlock()
+      }
+    } else {
+      return { acquired: false }
     }
   }
 }

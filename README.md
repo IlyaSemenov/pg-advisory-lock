@@ -69,18 +69,16 @@ await withLock("my-resource", async () => {
 ### Non-blocking Lock Attempts
 
 ```ts
-const { createMutex, tryLock } = createAdvisoryLock("postgresql://...")
+const { createMutex, tryWithLock } = createAdvisoryLock("postgresql://...")
 
-const unlock = await tryLock("my-resource")
-if (unlock) {
-  try {
-    // We got the lock, do exclusive work
-    console.log("Lock acquired!")
-    await someWork()
-  } finally {
-    // Always release the lock
-    await unlock()
-  }
+const result = await tryWithLock("my-resource", async () => {
+  // We got the lock, do exclusive work
+  console.log("Lock acquired!")
+  return await someWork()
+})
+
+if (result.acquired) {
+  console.log("Work completed:", result.result)
 } else {
   console.log("Lock not available, skipping work")
 }
@@ -90,18 +88,19 @@ or use a mutex instance:
 
 ```ts
 const mutex = createMutex("my-resource")
-const unlock = await mutex.tryLock()
-if (unlock) {
-  try {
-    console.log("Lock acquired!")
-    await someWork()
-  } finally {
-    await unlock()
-  }
+const result = await mutex.tryWithLock(async () => {
+  console.log("Lock acquired!")
+  return await someWork()
+})
+
+if (result.acquired) {
+  console.log("Work completed:", result.result)
 } else {
   console.log("Lock not available, skipping work")
 }
 ```
+
+> **Note**: The library also includes low-level `tryLock` methods that return unlock functions (similar to the `advisory-lock` API), but using `tryWithLock` is recommended as it automatically handles lock cleanup and provides a cleaner API.
 
 ## Lock Names and IDs
 
@@ -123,7 +122,8 @@ Returns an object with:
 
 - `createMutex(name)`: Creates a mutex for the given resource name
 - `withLock(name, fn)`: Convenience method to acquire a lock and execute a function
-- `tryLock(name)`: Convenience method to attempt acquiring a lock without blocking
+- `tryWithLock(name, fn)`: Convenience method to attempt acquiring a lock and execute a function without blocking
+- `tryLock(name)`: Low-level method to attempt acquiring a lock without blocking (discouraged, use `tryWithLock` instead)
 
 ### `createMutex(name)`
 
@@ -142,9 +142,21 @@ Convenience method that creates a mutex and immediately executes a function with
 
 Returns the result of the function. The lock is released even if the function throws an error.
 
+### `tryWithLock(name, fn)`
+
+Convenience method that creates a mutex and attempts to acquire the lock without blocking, executing the function if successful.
+
+- `name`: A string identifier for the resource to lock
+- `fn`: An async function to execute while holding the lock
+
+Returns:
+
+- `{ acquired: false }` if the lock is not available
+- `{ acquired: true, result: T }` if the lock was acquired and the function executed successfully
+
 ### `tryLock(name)`
 
-Convenience method that creates a mutex and attempts to acquire the lock without blocking.
+Low-level convenience method that creates a mutex and attempts to acquire the lock without blocking. **Note**: Using `tryWithLock` is recommended instead.
 
 - `name`: A string identifier for the resource to lock
 
@@ -161,14 +173,25 @@ Acquires the lock, executes the function, and automatically releases the lock.
 
 Returns the result of the function. The lock is released even if the function throws an error.
 
+### `mutex.tryWithLock(fn)`
+
+Attempts to acquire the lock without blocking and executes the provided function if successful.
+
+- `fn`: An async function to execute while holding the lock
+
+Returns:
+
+- `{ acquired: false }` if the lock is not available
+- `{ acquired: true, result: T }` if the lock was acquired and the function executed successfully
+
 ### `mutex.tryLock()`
 
-Attempts to acquire the lock without blocking.
+Low-level method that attempts to acquire the lock without blocking. **Note**: Using `tryWithLock` is recommended instead.
 
 Returns:
 
 - An unlock function if the lock was acquired
-- `null` if the lock is not available
+- `undefined` if the lock is not available
 
 ### `createAdvisoryLockKey(str)`
 
