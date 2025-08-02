@@ -1,5 +1,11 @@
 # pg-advisory-lock
 
+## 1.2.0
+
+### Minor Changes
+
+- 8624dcb: Add `tryWithLock`.
+
 ## 1.1.0
 
 ### Minor Changes
