@@ -1,11 +1,12 @@
-import { Pool } from "pg"
+// pg is a CommonJS package, so for ESM compatibility it must be imported as a default import
+import pg from "pg"
 
 import type { TryWithLockResult } from "./mutex"
 import { AdvisoryLockMutex } from "./mutex"
 
-export function createAdvisoryLock(connection: string | Pool) {
+export function createAdvisoryLock(connection: string | pg.Pool) {
   const pool = typeof connection === "string"
-    ? new Pool({ connectionString: connection })
+    ? new pg.Pool({ connectionString: connection })
     : connection
 
   /**
