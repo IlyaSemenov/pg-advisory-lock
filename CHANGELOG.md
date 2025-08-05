@@ -1,5 +1,11 @@
 # pg-advisory-lock
 
+## 1.2.1
+
+### Patch Changes
+
+- 9f03026: Fix ESM build unable to import pg without transpile.
+
 ## 1.2.0
 
 ### Minor Changes
