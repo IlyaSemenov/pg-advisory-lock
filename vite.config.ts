@@ -6,5 +6,6 @@ export default defineConfig({
   test: {
     // Tests interfere with each other because they use the same database and the same lock names.
     fileParallelism: false,
+    testTimeout: 1000,
   },
 })

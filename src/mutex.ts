@@ -1,14 +1,13 @@
-import type { Pool } from "pg"
-
 import { createAdvisoryLockKey } from "./key"
+import type { NestingPool } from "./pool"
 
 export type TryWithLockResult<T> = { acquired: false } | { acquired: true, result: T }
 
 export class AdvisoryLockMutex {
-  private readonly pool: Pool
+  private readonly pool: NestingPool
   private readonly lockKey: bigint
 
-  constructor(pool: Pool, name: string) {
+  constructor(pool: NestingPool, name: string) {
     this.pool = pool
     this.lockKey = createAdvisoryLockKey(name)
   }
@@ -17,8 +16,7 @@ export class AdvisoryLockMutex {
    * Acquires the lock and executes the provided function.
    */
   async withLock<T>(fn: () => PromiseLike<T>): Promise<T> {
-    const client = await this.pool.connect()
-    try {
+    return await this.pool.withClient(async (client) => {
       // Acquire the advisory lock (blocks until available)
       await client.query("SELECT pg_advisory_lock($1)", [this.lockKey])
 
@@ -28,10 +26,7 @@ export class AdvisoryLockMutex {
         // Always release the lock
         await client.query("SELECT pg_advisory_unlock($1)", [this.lockKey])
       }
-    } finally {
-      // Always return the client to the pool
-      client.release()
-    }
+    })
   }
 
   /**
@@ -40,7 +35,7 @@ export class AdvisoryLockMutex {
    * @returns an unlock function if successful, or `undefined` if the lock is not available.
    */
   async tryLock(): Promise<(() => Promise<void>) | undefined> {
-    const client = await this.pool.connect()
+    const { client, release } = await this.pool.getClient()
 
     try {
       // Try to acquire the advisory lock (non-blocking)
@@ -48,22 +43,22 @@ export class AdvisoryLockMutex {
       const acquired = result.rows[0]?.acquired
 
       if (acquired) {
-        // Return unlock function that releases the lock and returns the client
+        // Return unlock function that releases the lock and releases the client
         return async () => {
           try {
             await client.query("SELECT pg_advisory_unlock($1)", [this.lockKey])
           } finally {
-            client.release()
+            release()
           }
         }
       } else {
-        // Lock not available, return client to pool
-        client.release()
+        // Lock not available, release the client immediately
+        release()
         return undefined
       }
     } catch (error) {
-      // On error, return client to pool and re-throw
-      client.release()
+      // On error, release the client and re-throw
+      release()
       throw error
     }
   }

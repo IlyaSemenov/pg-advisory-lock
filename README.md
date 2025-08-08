@@ -110,6 +110,27 @@ Lock names are converted to numeric IDs using a hash function (namely, 64-bit `d
 - Different names will (very likely) produce different lock IDs
 - Lock names are case-sensitive
 
+## Nested Locks
+
+The library supports nested lock calls with the same key within the same async context:
+
+```ts
+await withLock("my-resource", async () => {
+  console.log("Outer lock acquired")
+
+  // This will not deadlock - it reuses the same database connection
+  await withLock("my-resource", async () => {
+    console.log("Nested lock acquired")
+    // Both locks are effectively held by the same connection
+  })
+
+  console.log("Back to outer lock")
+  // Lock is released when the outermost function completes
+})
+```
+
+**Note**: This connection reuse only applies within the same async execution context. Concurrent calls from different execution contexts will still properly block each other as expected.
+
 ## API
 
 ### `createAdvisoryLock(connection)`
