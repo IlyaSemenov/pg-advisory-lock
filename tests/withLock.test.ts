@@ -40,12 +40,12 @@ describe("mutex.withLock", () => {
     await Promise.all([
       mutex.withLock(async () => {
         log += "a"
-        await new Promise(resolve => setTimeout(resolve, 50))
+        await sleep(50)
         log += "b"
       }),
       sleep(1).then(() => mutex.withLock(async () => {
         log += "c"
-        await new Promise(resolve => setTimeout(resolve, 50))
+        await sleep(50)
         log += "d"
       })),
     ])
@@ -61,12 +61,12 @@ describe("mutex.withLock", () => {
     await Promise.all([
       mutex1.withLock(async () => {
         log += "a"
-        await new Promise(resolve => setTimeout(resolve, 50))
+        await sleep(50)
         log += "b"
       }),
       sleep(1).then(() => mutex2.withLock(async () => {
         log += "c"
-        await new Promise(resolve => setTimeout(resolve, 50))
+        await sleep(50)
         log += "d"
       })),
     ])
@@ -82,12 +82,12 @@ describe("mutex.withLock", () => {
     await Promise.all([
       mutex1.withLock(async () => {
         log += "a"
-        await new Promise(resolve => setTimeout(resolve, 10))
+        await sleep(10)
         log += "b"
       }),
       sleep(1).then(() => mutex2.withLock(async () => {
         log += "c"
-        await new Promise(resolve => setTimeout(resolve, 50))
+        await sleep(50)
         log += "d"
       })),
     ])
@@ -127,12 +127,12 @@ describe("convenience withLock", () => {
     await Promise.all([
       withLock("test-lock", async () => {
         log += "a"
-        await new Promise(resolve => setTimeout(resolve, 50))
+        await sleep(50)
         log += "b"
       }),
       sleep(1).then(() => withLock("test-lock", async () => {
         log += "c"
-        await new Promise(resolve => setTimeout(resolve, 50))
+        await sleep(50)
         log += "d"
       })),
     ])
