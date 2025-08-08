@@ -1,5 +1,11 @@
 # pg-advisory-lock
 
+## 1.3.0
+
+### Minor Changes
+
+- 3eeb5b7: Add support for nested locks within the same async context.
+
 ## 1.2.1
 
 ### Patch Changes
