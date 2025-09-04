@@ -1,5 +1,11 @@
 # pg-advisory-lock
 
+## 1.4.0
+
+### Minor Changes
+
+- 537a184: Add `wrapWithLock` method.
+
 ## 1.3.0
 
 ### Minor Changes
