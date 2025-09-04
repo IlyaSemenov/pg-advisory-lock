@@ -33,7 +33,7 @@ npm install pg-advisory-lock
 import { createAdvisoryLock } from "pg-advisory-lock"
 
 const databaseUrl = "postgresql://user:pass@localhost/db"
-const { createMutex, withLock } = createAdvisoryLock(databaseUrl)
+const { withLock } = createAdvisoryLock(databaseUrl)
 
 await withLock("my-resource", async () => {
   // Critical section - only one process can execute this at a time
@@ -43,12 +43,63 @@ await withLock("my-resource", async () => {
 })
 ```
 
-or use a mutex instance:
+### Non-blocking Lock Attempts
 
 ```ts
+const { tryWithLock } = createAdvisoryLock("postgresql://...")
+
+const result = await tryWithLock("my-resource", async () => {
+  // Lock available, do exclusive work
+  console.log("Lock acquired!")
+  return await someWork()
+})
+
+if (result.acquired) {
+  console.log("Work completed:", result.result)
+} else {
+  console.log("Lock not available, skipping work")
+}
+```
+
+### Non-blocking Legacy API
+
+For compatibility with `advisory-lock`, this library includes the low-level `tryLock` method:
+
+```ts
+const { tryLock } = createAdvisoryLock("postgresql://...")
+
+const unlock = await tryLock("my-resource")
+if (unlock) {
+  try {
+    // Lock available, do exclusive work
+    console.log("Lock acquired!")
+  } finally {
+    await unlock()
+  }
+} else {
+  console.log("Lock not available, skipping work")
+}
+```
+
+Using `tryWithLock` is recommended over this method as it automatically handles lock cleanup and provides a cleaner API.
+
+### Using a Mutex Instance
+
+```ts
+import { createAdvisoryLock } from "pg-advisory-lock"
+
+const { createMutex } = createAdvisoryLock("postgresql://...")
+
+// Create a mutex instance
 const mutex = createMutex("my-resource")
+
 await mutex.withLock(async () => {
   // Your exclusive code here
+})
+
+// All other methods are also available on the instance:
+await mutex.tryWithLock(async () => {
+  // Lock available, do exclusive work
 })
 ```
 
@@ -59,48 +110,12 @@ import { Pool } from "pg"
 import { createAdvisoryLock } from "pg-advisory-lock"
 
 const pool = new Pool({ connectionString: "postgresql://..." })
-const { createMutex, withLock } = createAdvisoryLock(pool)
+const { withLock } = createAdvisoryLock(pool)
 
 await withLock("my-resource", async () => {
   // Your exclusive code here
 })
 ```
-
-### Non-blocking Lock Attempts
-
-```ts
-const { createMutex, tryWithLock } = createAdvisoryLock("postgresql://...")
-
-const result = await tryWithLock("my-resource", async () => {
-  // We got the lock, do exclusive work
-  console.log("Lock acquired!")
-  return await someWork()
-})
-
-if (result.acquired) {
-  console.log("Work completed:", result.result)
-} else {
-  console.log("Lock not available, skipping work")
-}
-```
-
-or use a mutex instance:
-
-```ts
-const mutex = createMutex("my-resource")
-const result = await mutex.tryWithLock(async () => {
-  console.log("Lock acquired!")
-  return await someWork()
-})
-
-if (result.acquired) {
-  console.log("Work completed:", result.result)
-} else {
-  console.log("Lock not available, skipping work")
-}
-```
-
-> **Note**: The library also includes low-level `tryLock` methods that return unlock functions (similar to the `advisory-lock` API), but using `tryWithLock` is recommended as it automatically handles lock cleanup and provides a cleaner API.
 
 ## Lock Names and IDs
 
