@@ -38,7 +38,7 @@ const { withLock } = createAdvisoryLock(databaseUrl)
 await withLock("my-resource", async () => {
   // Critical section - only one process can execute this at a time
   console.log("Doing exclusive work...")
-  await someAsyncWork()
+  await someExclusiveWork()
   // Lock is automatically released when function completes or throws
 })
 ```
@@ -51,7 +51,7 @@ const { tryWithLock } = createAdvisoryLock("postgresql://...")
 const result = await tryWithLock("my-resource", async () => {
   // Lock available, do exclusive work
   console.log("Lock acquired!")
-  return await someWork()
+  return await someExclusiveWork()
 })
 
 if (result.acquired) {
@@ -83,6 +83,29 @@ if (unlock) {
 
 Using `tryWithLock` is recommended over this method as it automatically handles lock cleanup and provides a cleaner API.
 
+### Function Wrapping
+
+You can wrap existing functions to automatically acquire locks before calling them:
+
+```ts
+import { createAdvisoryLock } from "pg-advisory-lock"
+
+const { wrapWithLock } = createAdvisoryLock("postgresql://...")
+
+// Original function (not thread-safe)
+async function sum(a: number, b: number) {
+  console.log(`Calculating ${a} + ${b}`)
+  return a + b
+}
+
+// Wrap it with a lock
+const lockingSum = wrapWithLock("calculator", sum)
+
+// Now calling lockingSum will automatically acquire the lock
+const result = await lockingSum(1, 2) // Lock acquired, function executed, lock released
+console.log(result) // 3
+```
+
 ### Using a Mutex Instance
 
 ```ts
@@ -94,14 +117,13 @@ const { createMutex } = createAdvisoryLock("postgresql://...")
 const mutex = createMutex("my-resource")
 
 await mutex.withLock(async () => {
-  // Your exclusive code here
-})
-
-// All other methods are also available on the instance:
-await mutex.tryWithLock(async () => {
-  // Lock available, do exclusive work
+  // Critical section - only one process can execute this at a time
+  console.log("Processing with mutex lock...")
+  await someExclusiveWork()
 })
 ```
+
+All other methods (`tryWithLock`, `tryLock`, `wrapWithLock`) are also available on the mutex instance.
 
 ### Using with Existing Connection Pool
 
@@ -160,6 +182,7 @@ Returns an object with:
 - `withLock(name, fn)`: Convenience method to acquire a lock and execute a function
 - `tryWithLock(name, fn)`: Convenience method to attempt acquiring a lock and execute a function without blocking
 - `tryLock(name)`: Low-level method to attempt acquiring a lock without blocking (discouraged, use `tryWithLock` instead)
+- `wrapWithLock(name, fn)`: Wraps a function to automatically acquire a lock before calling it
 
 ### `createMutex(name)`
 
@@ -201,6 +224,15 @@ Returns:
 - An unlock function if the lock was acquired
 - `undefined` if the lock is not available
 
+### `wrapWithLock(name, fn)`
+
+Wraps a function to automatically acquire a lock before calling it.
+
+- `name`: A string identifier for the resource to lock
+- `fn`: The function to wrap
+
+Returns a wrapped function that acquires the lock before calling the original function.
+
 ### `mutex.withLock(fn)`
 
 Acquires the lock, executes the function, and automatically releases the lock.
@@ -228,6 +260,14 @@ Returns:
 
 - An unlock function if the lock was acquired
 - `undefined` if the lock is not available
+
+### `mutex.wrapWithLock(fn)`
+
+Wraps a function to automatically acquire this mutex's lock before calling it.
+
+- `fn`: The function to wrap
+
+Returns a wrapped function that acquires the lock before calling the original function.
 
 ### `createAdvisoryLockKey(str)`
 

@@ -46,5 +46,19 @@ export function createAdvisoryLock(connection: string | pg.Pool) {
     return createMutex(name).tryWithLock(fn)
   }
 
-  return { createMutex, withLock, tryLock, tryWithLock }
+  /**
+   * Wraps a function to always acquire a lock before calling it.
+   *
+   * @param name - The resource name to lock
+   * @param fn - The function to wrap
+   * @returns A wrapped function that acquires the lock before calling the original function
+   */
+  function wrapWithLock<TArgs extends readonly unknown[], TReturn>(
+    name: string,
+    fn: (...args: TArgs) => PromiseLike<TReturn>,
+  ): (...args: TArgs) => Promise<TReturn> {
+    return createMutex(name).wrapWithLock(fn)
+  }
+
+  return { createMutex, withLock, tryLock, tryWithLock, wrapWithLock }
 }

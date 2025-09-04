@@ -41,7 +41,7 @@
     "lint": "eslint --fix .",
     "prepare": "husky",
     "prepublishOnly": "pnpm build",
-    "test": "vitest run"
+    "test": "vitest run --typecheck"
   },
   "dependencies": {
     "pg": "^8"

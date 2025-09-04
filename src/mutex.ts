@@ -83,4 +83,16 @@ export class AdvisoryLockMutex {
       return { acquired: false }
     }
   }
+
+  /**
+   * Wraps a function to always acquire this mutex's lock before calling it.
+   *
+   * @param fn - The function to wrap
+   * @returns A wrapped function that acquires the lock before calling the original function
+   */
+  wrapWithLock<TArgs extends readonly unknown[], TReturn>(
+    fn: (...args: TArgs) => PromiseLike<TReturn>,
+  ): (...args: TArgs) => Promise<TReturn> {
+    return async (...args: TArgs) => this.withLock(() => fn(...args))
+  }
 }
