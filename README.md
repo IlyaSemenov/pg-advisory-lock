@@ -27,7 +27,7 @@ npm install pg-advisory-lock
 
 ## Usage
 
-### Basic Usage with Database URL
+### Basic Usage
 
 ```ts
 import { createAdvisoryLock } from "pg-advisory-lock"
