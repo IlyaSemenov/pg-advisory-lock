@@ -4,7 +4,7 @@ A TypeScript library for PostgreSQL advisory locks, providing distributed mutex 
 
 This is a modern rewrite of [advisory-lock](https://github.com/olalonde/advisory-lock) which seemed to be unmaintained.
 
-## What are PostgreSQL Advisory Locks?
+### What are PostgreSQL Advisory Locks?
 
 PostgreSQL advisory locks are application-level locks that use the database to coordinate access to shared resources. Unlike table-level locks, advisory locks:
 
@@ -13,7 +13,7 @@ PostgreSQL advisory locks are application-level locks that use the database to c
 - Are automatically released when the database session ends
 - Can be used to implement distributed mutexes across multiple processes/servers
 
-## Use Cases
+### Use Cases
 
 - **Job Processing**: Ensure only one worker processes a specific job
 - **Database Migrations**: Coordinate schema changes across deployments
