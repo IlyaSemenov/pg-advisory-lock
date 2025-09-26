@@ -5,10 +5,10 @@ import type { TryWithLockResult } from "./mutex"
 import { AdvisoryLockMutex } from "./mutex"
 import { NestingPool } from "./pool"
 
-export function createAdvisoryLock(connection: string | pg.Pool) {
-  const basePool = typeof connection === "string"
-    ? new pg.Pool({ connectionString: connection })
-    : connection
+export function createAdvisoryLock(connection: string | pg.PoolConfig | pg.Pool) {
+  const basePool = connection instanceof pg.Pool
+    ? connection
+    : new pg.Pool(typeof connection === "object" ? connection : { connectionString: connection })
 
   const pool = new NestingPool(basePool)
 

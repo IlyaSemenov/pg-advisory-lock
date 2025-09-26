@@ -125,6 +125,23 @@ await mutex.withLock(async () => {
 
 All other methods (`tryWithLock`, `tryLock`, `wrapWithLock`) are also available on the mutex instance.
 
+### Custom Connection Options
+
+Instead of the connection string, you can pass the pool options:
+
+```ts
+import { createAdvisoryLock } from "pg-advisory-lock"
+
+const { withLock } = createAdvisoryLock({
+  connectionString: "postgresql://...",
+  idleTimeoutMillis: 30000,
+})
+
+await withLock("my-resource", async () => {
+  // Your exclusive code here
+})
+```
+
 ### Using with Existing Connection Pool
 
 ```ts
