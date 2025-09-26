@@ -183,7 +183,9 @@ await withLock("my-resource", async () => {
 })
 ```
 
-**Note**: This connection reuse only applies within the same async execution context. Concurrent calls from different execution contexts will still properly block each other as expected.
+This connection reuse only applies within the same async execution context. Concurrent calls from different execution contexts will still properly block each other as expected.
+
+**Please pay special attention to the async context.** When the outermost `withLock` completes, the database connection will be released. If you have any "orphaned" async operations that were initiated within the callback but continue running after the lock is released, they will fail when attempting to acquire a new lock, resulting in the error: _"Error: Client was closed and is not queryable"_.
 
 ## API
 
