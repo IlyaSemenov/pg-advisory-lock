@@ -23,8 +23,31 @@ export class AdvisoryLockMutex {
       try {
         return await fn()
       } finally {
-        // Always release the lock
         await client.query("SELECT pg_advisory_unlock($1)", [this.lockKey])
+      }
+    })
+  }
+
+  /**
+   * Attempts to acquire the lock without blocking and execute the provided function if successful.
+   *
+   * @returns
+   *  - `{ acquired: false }` if the lock is not available
+   *  - `{ acquired: true, result: T }` if the lock was acquired and the function executed
+   */
+  async tryWithLock<T>(fn: () => PromiseLike<T>): Promise<TryWithLockResult<T>> {
+    return await this.pool.withClient(async (client) => {
+      // Try to acquire the advisory lock (non-blocking)
+      const result = await client.query<{ acquired: boolean }>("SELECT pg_try_advisory_lock($1) as acquired", [this.lockKey])
+      const acquired = result.rows[0]?.acquired
+      if (acquired) {
+        try {
+          return { acquired: true, result: await fn() }
+        } finally {
+          await client.query("SELECT pg_advisory_unlock($1)", [this.lockKey])
+        }
+      } else {
+        return { acquired: false }
       }
     })
   }
@@ -33,13 +56,15 @@ export class AdvisoryLockMutex {
    * Attempts to acquire the lock without blocking.
    *
    * @returns an unlock function if successful, or `undefined` if the lock is not available.
+   *
+   * @deprecated Use `tryWithLock` instead. This method does not work reliably for nested locks.
    */
   async tryLock(): Promise<(() => Promise<void>) | undefined> {
     const { client, release } = await this.pool.getClient()
 
     try {
       // Try to acquire the advisory lock (non-blocking)
-      const result = await client.query("SELECT pg_try_advisory_lock($1) as acquired", [this.lockKey])
+      const result = await client.query<{ acquired: boolean }>("SELECT pg_try_advisory_lock($1) as acquired", [this.lockKey])
       const acquired = result.rows[0]?.acquired
 
       if (acquired) {
@@ -60,27 +85,6 @@ export class AdvisoryLockMutex {
       // On error, release the client and re-throw
       release()
       throw error
-    }
-  }
-
-  /**
-   * Attempts to acquire the lock without blocking and execute the provided function if successful.
-   *
-   * @returns
-   *  - `{ acquired: false }` if the lock is not available
-   *  - `{ acquired: true, result: T }` if the lock was acquired and the function executed
-   */
-  async tryWithLock<T>(fn: () => PromiseLike<T>): Promise<TryWithLockResult<T>> {
-    const unlock = await this.tryLock()
-    if (unlock) {
-      try {
-        const result = await fn()
-        return { acquired: true, result }
-      } finally {
-        await unlock()
-      }
-    } else {
-      return { acquired: false }
     }
   }
 

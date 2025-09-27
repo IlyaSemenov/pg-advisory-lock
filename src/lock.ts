@@ -27,15 +27,6 @@ export function createAdvisoryLock(connection: string | pg.PoolConfig | pg.Pool)
   }
 
   /**
-   * Attempts to acquire the lock without blocking.
-   *
-   * @returns an unlock function if successful, or `undefined` if the lock is not available.
-   */
-  async function tryLock(name: string): Promise<(() => Promise<void>) | undefined> {
-    return createMutex(name).tryLock()
-  }
-
-  /**
    * Attempts to acquire the lock without blocking and execute the provided function if successful.
    *
    * @returns
@@ -44,6 +35,17 @@ export function createAdvisoryLock(connection: string | pg.PoolConfig | pg.Pool)
    */
   async function tryWithLock<T>(name: string, fn: () => PromiseLike<T>): Promise<TryWithLockResult<T>> {
     return createMutex(name).tryWithLock(fn)
+  }
+
+  /**
+   * Attempts to acquire the lock without blocking.
+   *
+   * @returns an unlock function if successful, or `undefined` if the lock is not available.
+   *
+   * @deprecated Use `tryWithLock` instead. This method does not work reliably for nested locks.
+   */
+  async function tryLock(name: string): Promise<(() => Promise<void>) | undefined> {
+    return createMutex(name).tryLock()
   }
 
   /**

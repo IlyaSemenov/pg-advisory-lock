@@ -1,5 +1,5 @@
 import { createAdvisoryLock } from "pg-advisory-lock"
-import { expect, it, test } from "vitest"
+import { expect, test } from "vitest"
 
 import { databaseUrl, sleep } from "#test-utils"
 
@@ -38,6 +38,31 @@ test("withLock > tryLock with same key", async () => {
   })
 
   expect(result).toBe("success")
+})
+
+test("tryWithLock > tryWithLock with same key", async () => {
+  const result = await tryWithLock("nested-try-test", async () => {
+    const nestedResult = await tryWithLock("nested-try-test", async () => "nested-success")
+    return { outer: "success", nested: nestedResult }
+  })
+
+  expect(result).toEqual({
+    acquired: true,
+    result: {
+      outer: "success",
+      nested: { acquired: true, result: "nested-success" },
+    },
+  })
+})
+
+test("tryLock > tryLock with same key", async () => {
+  const unlock1 = await tryLock("nested-trylock-test")
+  expect(unlock1).toBeDefined()
+  const unlock2 = await tryLock("nested-trylock-test")
+  // TODO: See if this can work.
+  // After all, we're in the same async context with the above lock.
+  expect(unlock2).toBeUndefined()
+  await unlock1?.()
 })
 
 test("withLock > mutex.withLock with same key", async () => {
@@ -105,13 +130,4 @@ test("withLock prevents concurrent access from different call stacks", async () 
   ])
 
   expect(log).toBe("abcd")
-})
-
-test("tryLock > tryLock with same key", async () => {
-  const unlock1 = await tryLock("nested-trylock-test")
-  expect(unlock1).toBeDefined()
-  const unlock2 = await tryLock("nested-trylock-test")
-  // TODO: Make this also defined, as we're in the same async context with the above lock.
-  expect(unlock2).toBeUndefined()
-  await unlock1?.()
 })
