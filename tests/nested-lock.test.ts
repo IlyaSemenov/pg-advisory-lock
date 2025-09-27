@@ -55,13 +55,15 @@ test("tryWithLock > tryWithLock with same key", async () => {
   })
 })
 
-test("tryLock > tryLock with same key", async () => {
+// It's not clear if this should work at all.
+// How do we know the calls are actually "nested"?
+// How do we precisely define the concept of "nesting"?
+test.fails("tryLock > tryLock with same key", async () => {
   const unlock1 = await tryLock("nested-trylock-test")
   expect(unlock1).toBeDefined()
   const unlock2 = await tryLock("nested-trylock-test")
-  // TODO: See if this can work.
-  // After all, we're in the same async context with the above lock.
-  expect(unlock2).toBeUndefined()
+  expect(unlock2).toBeDefined()
+  await unlock2?.()
   await unlock1?.()
 })
 
@@ -111,7 +113,7 @@ test("deeply nested withLock", async () => {
   expect(result).toBe("deep-success")
 })
 
-test("withLock prevents concurrent access from different call stacks", async () => {
+test("concurrent withLock", async () => {
   let log = ""
 
   await Promise.all([
@@ -130,4 +132,19 @@ test("withLock prevents concurrent access from different call stacks", async () 
   ])
 
   expect(log).toBe("abcd")
+})
+
+test("concurrent tryLock", async () => {
+  await Promise.all([
+    tryLock("concurrent-test").then(async (release) => {
+      expect(release).toBeDefined()
+      await sleep(50)
+      await release?.()
+    }),
+    sleep(10).then(() =>
+      tryLock("concurrent-test").then(async (release) => {
+        expect(release).toBeUndefined()
+      }),
+    ),
+  ])
 })
