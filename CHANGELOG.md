@@ -1,5 +1,15 @@
 # pg-advisory-lock
 
+## 1.5.0
+
+### Minor Changes
+
+- 792166a: Accept custom pool options for `createAdvisoryLock()`.
+
+### Patch Changes
+
+- 5a59020: Fix nested `tryWithLock`.
+
 ## 1.4.0
 
 ### Minor Changes
