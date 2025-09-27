@@ -5,6 +5,7 @@ import type { Pool, PoolClient } from "pg"
 export type NestingPoolClient = {
   client: PoolClient
   release: () => void
+  nested: boolean
 }
 
 /**
@@ -15,24 +16,23 @@ export class NestingPool {
 
   connectionStorage = new AsyncLocalStorage<PoolClient>()
 
+  /**
+   * Creates a new client, or reuses an existing client from the AsyncLocalStorage.
+   */
   async getClient(): Promise<NestingPoolClient> {
     const client = this.connectionStorage.getStore()
     if (client) {
       return {
         client,
-        release: () => {
-          // No-op. We were reusing the client from the AsyncLocalStorage.
-        },
+        release: () => {},
+        nested: true,
       }
     } else {
       const client = await this.pool.connect()
-      this.connectionStorage.enterWith(client)
       return {
         client,
-        release: () => {
-          this.connectionStorage.disable()
-          client.release()
-        },
+        release: () => client.release(),
+        nested: false,
       }
     }
   }
@@ -45,19 +45,16 @@ export class NestingPool {
    * For nested lock calls, the client is reused from the AsyncLocalStorage.
    */
   async withClient<T>(fn: (client: PoolClient) => Promise<T>) {
-    const existingClient = this.connectionStorage.getStore()
+    const { client, release, nested } = await this.getClient()
 
-    if (existingClient) {
-      // Reuse existing client from AsyncLocalStorage
-      return await fn(existingClient)
+    if (nested) {
+      return await fn(client)
     } else {
-      // Create new client and establish AsyncLocalStorage context
-      const client = await this.pool.connect()
       return this.connectionStorage.run(client, async () => {
         try {
           return await fn(client)
         } finally {
-          client.release()
+          release()
         }
       })
     }

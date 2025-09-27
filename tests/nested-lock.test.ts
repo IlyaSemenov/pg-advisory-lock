@@ -106,3 +106,12 @@ test("withLock prevents concurrent access from different call stacks", async () 
 
   expect(log).toBe("abcd")
 })
+
+test("tryLock > tryLock with same key", async () => {
+  const unlock1 = await tryLock("nested-trylock-test")
+  expect(unlock1).toBeDefined()
+  const unlock2 = await tryLock("nested-trylock-test")
+  // TODO: Make this also defined, as we're in the same async context with the above lock.
+  expect(unlock2).toBeUndefined()
+  await unlock1?.()
+})
