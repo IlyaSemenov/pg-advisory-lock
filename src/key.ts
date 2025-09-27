@@ -1,3 +1,5 @@
+// For lock names, we use 64-bit djb2 hash.
+
 /**
  * Convert a string to a lock key (signed 64-bit integer).
  */
