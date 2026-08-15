@@ -1,4 +1,4 @@
-import { expect, it } from "vitest"
+import { expect, it } from "bun:test"
 
 import { createAdvisoryLockKey } from "./key"
 
@@ -9,7 +9,7 @@ const strings = [
   "'Join the army!', they said. 'See the world!', they said. I'd rather be sailing.",
 ]
 // Come up with more keys by combining existing keys
-strings.push(...strings.flatMap(s1 => strings.map(s2 => s1 + s2)))
+strings.push(...strings.flatMap((s1) => strings.map((s2) => s1 + s2)))
 
 it("generates different keys", () => {
   const keys = new Set(strings.map(createAdvisoryLockKey))

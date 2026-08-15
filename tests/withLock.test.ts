@@ -1,5 +1,6 @@
+import { describe, expect, it } from "bun:test"
+
 import { createAdvisoryLock } from "pg-advisory-lock"
-import { describe, expect, it } from "vitest"
 
 import { databaseUrl, sleep } from "#test-utils"
 
@@ -43,11 +44,13 @@ describe("mutex.withLock", () => {
         await sleep(50)
         log += "b"
       }),
-      sleep(1).then(() => mutex.withLock(async () => {
-        log += "c"
-        await sleep(50)
-        log += "d"
-      })),
+      sleep(1).then(() =>
+        mutex.withLock(async () => {
+          log += "c"
+          await sleep(50)
+          log += "d"
+        }),
+      ),
     ])
 
     expect(log).toBe("abcd")
@@ -64,11 +67,13 @@ describe("mutex.withLock", () => {
         await sleep(50)
         log += "b"
       }),
-      sleep(1).then(() => mutex2.withLock(async () => {
-        log += "c"
-        await sleep(50)
-        log += "d"
-      })),
+      sleep(1).then(() =>
+        mutex2.withLock(async () => {
+          log += "c"
+          await sleep(50)
+          log += "d"
+        }),
+      ),
     ])
 
     expect(log).toBe("abcd")
@@ -85,11 +90,13 @@ describe("mutex.withLock", () => {
         await sleep(10)
         log += "b"
       }),
-      sleep(1).then(() => mutex2.withLock(async () => {
-        log += "c"
-        await sleep(50)
-        log += "d"
-      })),
+      sleep(1).then(() =>
+        mutex2.withLock(async () => {
+          log += "c"
+          await sleep(50)
+          log += "d"
+        }),
+      ),
     ])
 
     expect(log).toBe("acbd")
@@ -130,11 +137,13 @@ describe("convenience withLock", () => {
         await sleep(50)
         log += "b"
       }),
-      sleep(1).then(() => withLock("test-lock", async () => {
-        log += "c"
-        await sleep(50)
-        log += "d"
-      })),
+      sleep(1).then(() =>
+        withLock("test-lock", async () => {
+          log += "c"
+          await sleep(50)
+          log += "d"
+        }),
+      ),
     ])
 
     expect(log).toBe("abcd")

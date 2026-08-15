@@ -1,8 +1,7 @@
 {
-  "extends": "tsconfig-vite-node",
+  "extends": "@tsconfig/bun",
   "compilerOptions": {
-    "paths": {
-      "pg-advisory-lock": ["./src"]
-    }
-  }
+    "types": ["bun"]
+  },
+  "include": ["src/**/*.ts", "*.ts"]
 }

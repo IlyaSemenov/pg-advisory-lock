@@ -1,6 +1,7 @@
+import { describe, expect, test } from "bun:test"
+
 import pg from "pg"
 import { createAdvisoryLock } from "pg-advisory-lock"
-import { describe, expect, test } from "vitest"
 
 import { databaseUrl } from "#test-utils"
 

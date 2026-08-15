@@ -1,5 +1,6 @@
+import { describe, expectTypeOf, test } from "bun:test"
+
 import { createAdvisoryLock } from "pg-advisory-lock"
-import { assertType, describe, expectTypeOf, test } from "vitest"
 
 import { databaseUrl } from "#test-utils"
 
@@ -16,7 +17,9 @@ describe("wrapWithLock type tests", () => {
     expectTypeOf(wrappedFunction).parameter(0).toBeNumber()
     expectTypeOf(wrappedFunction).parameter(1).toBeString()
     expectTypeOf(wrappedFunction).parameter(2).toBeBoolean()
-    expectTypeOf(wrappedFunction).returns.toEqualTypeOf<Promise<{ a: number, b: string, c: boolean }>>()
+    expectTypeOf(wrappedFunction).returns.toEqualTypeOf<
+      Promise<{ a: number; b: string; c: boolean }>
+    >()
   })
 
   test("should preserve function signature with no parameters", () => {
@@ -64,26 +67,38 @@ describe("wrapWithLock type tests", () => {
       email?: string
     }
 
-    const originalFunction = async (user: User, action: "create" | "update") => {
+    const originalFunction = async (
+      user: User,
+      action: "create" | "update",
+    ) => {
       return { ...user, action, timestamp: new Date() }
     }
 
     const wrappedFunction = wrapWithLock("test", originalFunction)
 
     expectTypeOf(wrappedFunction).parameter(0).toMatchTypeOf<User>()
-    expectTypeOf(wrappedFunction).parameter(1).toEqualTypeOf<"create" | "update">()
-    expectTypeOf(wrappedFunction).toBeCallableWith({ id: 1, name: "John" }, "create")
+    expectTypeOf(wrappedFunction)
+      .parameter(1)
+      .toEqualTypeOf<"create" | "update">()
+    expectTypeOf(wrappedFunction).toBeCallableWith(
+      { id: 1, name: "John" },
+      "create",
+    )
   })
 
   test("should preserve union types", () => {
-    const originalFunction = async (input: string | number): Promise<string | number> => {
+    const originalFunction = async (
+      input: string | number,
+    ): Promise<string | number> => {
       return input
     }
 
     const wrappedFunction = wrapWithLock("test", originalFunction)
 
     expectTypeOf(wrappedFunction).parameter(0).toEqualTypeOf<string | number>()
-    expectTypeOf(wrappedFunction).returns.toEqualTypeOf<Promise<string | number>>()
+    expectTypeOf(wrappedFunction).returns.toEqualTypeOf<
+      Promise<string | number>
+    >()
   })
 
   test("should reject invalid parameter types", () => {
@@ -151,20 +166,25 @@ describe("createAdvisoryLock return type tests", () => {
   })
 })
 
-describe("assertType tests", () => {
-  test("should work with assertType", () => {
+describe("type assignability tests", () => {
+  test("should preserve assignability", () => {
     const { wrapWithLock } = createAdvisoryLock(databaseUrl)
 
     const originalFunction = async (x: number) => x * 2
     const wrappedFunction = wrapWithLock("test", originalFunction)
 
     // These should pass
-    assertType<(x: number) => Promise<number>>(wrappedFunction)
+    expectTypeOf(wrappedFunction).toEqualTypeOf<
+      (x: number) => Promise<number>
+    >()
 
     // @ts-expect-error wrong return type
-    assertType<(x: number) => Promise<string>>(wrappedFunction)
+    const wrongReturn: (x: number) => Promise<string> = wrappedFunction
 
     // @ts-expect-error wrong parameter type
-    assertType<(x: string) => Promise<number>>(wrappedFunction)
+    const wrongParameter: (x: string) => Promise<number> = wrappedFunction
+
+    void wrongReturn
+    void wrongParameter
   })
 })

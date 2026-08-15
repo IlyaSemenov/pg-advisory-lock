@@ -1,5 +1,6 @@
+import { afterEach, beforeEach, describe, expect, it } from "bun:test"
+
 import { Pool } from "pg"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import { databaseUrl, sleep } from "#test-utils"
 
@@ -96,11 +97,13 @@ describe("test NestingPool", () => {
     it("should support nested calls by reusing the same client", async () => {
       const result = await nestingPool.withClient(async (outerClient) => {
         // Nested call
-        const nestedResult = await nestingPool.withClient(async (nestedClient) => {
-          expect(nestedClient).toBe(outerClient) // Should be the same client
-          const queryResult = await nestedClient.query("SELECT 6 as test")
-          return queryResult.rows[0].test
-        })
+        const nestedResult = await nestingPool.withClient(
+          async (nestedClient) => {
+            expect(nestedClient).toBe(outerClient) // Should be the same client
+            const queryResult = await nestedClient.query("SELECT 6 as test")
+            return queryResult.rows[0].test
+          },
+        )
 
         expect(nestedResult).toBe(6)
 
@@ -114,19 +117,23 @@ describe("test NestingPool", () => {
 
     it("should handle multiple nested levels correctly", async () => {
       const result = await nestingPool.withClient(async (level1Client) => {
-        const level2Result = await nestingPool.withClient(async (level2Client) => {
-          expect(level2Client).toBe(level1Client)
+        const level2Result = await nestingPool.withClient(
+          async (level2Client) => {
+            expect(level2Client).toBe(level1Client)
 
-          const level3Result = await nestingPool.withClient(async (level3Client) => {
-            expect(level3Client).toBe(level1Client)
-            const queryResult = await level3Client.query("SELECT 8 as test")
+            const level3Result = await nestingPool.withClient(
+              async (level3Client) => {
+                expect(level3Client).toBe(level1Client)
+                const queryResult = await level3Client.query("SELECT 8 as test")
+                return queryResult.rows[0].test
+              },
+            )
+
+            expect(level3Result).toBe(8)
+            const queryResult = await level2Client.query("SELECT 9 as test")
             return queryResult.rows[0].test
-          })
-
-          expect(level3Result).toBe(8)
-          const queryResult = await level2Client.query("SELECT 9 as test")
-          return queryResult.rows[0].test
-        })
+          },
+        )
 
         expect(level2Result).toBe(9)
         const queryResult = await level1Client.query("SELECT 10 as test")

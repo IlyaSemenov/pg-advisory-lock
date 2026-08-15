@@ -4,5 +4,6 @@
     "paths": {
       "pg-advisory-lock": ["../src"]
     }
-  }
+  },
+  "include": ["**/*.ts"]
 }

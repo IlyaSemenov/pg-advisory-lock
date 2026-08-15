@@ -1,14 +1,19 @@
+import { expect, test } from "bun:test"
+
 import { createAdvisoryLock } from "pg-advisory-lock"
-import { expect, test } from "vitest"
 
 import { databaseUrl, sleep } from "#test-utils"
 
-const { createMutex, withLock, tryLock, tryWithLock } = createAdvisoryLock(databaseUrl)
+const { createMutex, withLock, tryLock, tryWithLock } =
+  createAdvisoryLock(databaseUrl)
 
 test("withLock > withLock with same key", async () => {
   const result = await withLock("nested-test", async () => {
     // This should reuse the same connection and not deadlock
-    const nestedResult = await withLock("nested-test", async () => "nested-success")
+    const nestedResult = await withLock(
+      "nested-test",
+      async () => "nested-success",
+    )
     return { outer: "success", nested: nestedResult }
   })
 
@@ -18,7 +23,10 @@ test("withLock > withLock with same key", async () => {
 test("withLock > tryWithLock with same key", async () => {
   const result = await withLock("nested-try-test", async () => {
     // This should reuse the same connection and succeed
-    const nestedResult = await tryWithLock("nested-try-test", async () => "nested-success")
+    const nestedResult = await tryWithLock(
+      "nested-try-test",
+      async () => "nested-success",
+    )
     return { outer: "success", nested: nestedResult }
   })
 
@@ -42,7 +50,10 @@ test("withLock > tryLock with same key", async () => {
 
 test("tryWithLock > tryWithLock with same key", async () => {
   const result = await tryWithLock("nested-try-test", async () => {
-    const nestedResult = await tryWithLock("nested-try-test", async () => "nested-success")
+    const nestedResult = await tryWithLock(
+      "nested-try-test",
+      async () => "nested-success",
+    )
     return { outer: "success", nested: nestedResult }
   })
 
@@ -58,7 +69,7 @@ test("tryWithLock > tryWithLock with same key", async () => {
 // It's not clear if this should work at all.
 // How do we know the calls are actually "nested"?
 // How do we precisely define the concept of "nesting"?
-test.fails("tryLock > tryLock with same key", async () => {
+test.failing("tryLock > tryLock with same key", async () => {
   const unlock1 = await tryLock("nested-trylock-test")
   expect(unlock1).toBeDefined()
   const unlock2 = await tryLock("nested-trylock-test")
@@ -82,7 +93,10 @@ test("mutex.withLock > withLock with same key", async () => {
   const mutex = createMutex("mixed-nested-test-2")
   const result = await mutex.withLock(async () => {
     // This should reuse the same connection and not deadlock
-    const nestedResult = await withLock("mixed-nested-test-2", async () => "nested-success")
+    const nestedResult = await withLock(
+      "mixed-nested-test-2",
+      async () => "nested-success",
+    )
     return { outer: "success", nested: nestedResult }
   })
 

@@ -1,5 +1,6 @@
+import { describe, expect, it } from "bun:test"
+
 import { createAdvisoryLock } from "pg-advisory-lock"
-import { describe, expect, it } from "vitest"
 
 import { databaseUrl, sleep } from "#test-utils"
 
@@ -27,9 +28,11 @@ describe("mutex.tryWithLock", () => {
         await sleep(100) // Hold the lock for a bit
         return "first"
       }),
-      sleep(1).then(() => mutex.tryWithLock(async () => {
-        return "second"
-      })),
+      sleep(1).then(() =>
+        mutex.tryWithLock(async () => {
+          return "second"
+        }),
+      ),
     ])
 
     expect(result1).toEqual({ acquired: true, result: "first" })
@@ -59,9 +62,11 @@ describe("mutex.tryWithLock", () => {
         await sleep(100) // Hold the lock for a bit
         return "first"
       }),
-      sleep(1).then(() => mutex2.tryWithLock(async () => {
-        return "second"
-      })),
+      sleep(1).then(() =>
+        mutex2.tryWithLock(async () => {
+          return "second"
+        }),
+      ),
     ])
 
     expect(result1).toEqual({ acquired: true, result: "first" })
@@ -80,12 +85,14 @@ describe("mutex.tryWithLock", () => {
         log += "b"
         return "first"
       }),
-      sleep(5).then(() => mutex2.tryWithLock(async () => {
-        log += "c"
-        await sleep(20)
-        log += "d"
-        return "second"
-      })),
+      sleep(5).then(() =>
+        mutex2.tryWithLock(async () => {
+          log += "c"
+          await sleep(20)
+          log += "d"
+          return "second"
+        }),
+      ),
     ])
 
     expect(result1).toEqual({ acquired: true, result: "first" })
@@ -155,13 +162,18 @@ describe("convenience tryWithLock", () => {
     const numberResult = await tryWithLock("test-lock", async () => 42)
     expect(numberResult).toEqual({ acquired: true, result: 42 })
 
-    const objectResult = await tryWithLock("test-lock", async () => ({ foo: "bar" }))
+    const objectResult = await tryWithLock("test-lock", async () => ({
+      foo: "bar",
+    }))
     expect(objectResult).toEqual({ acquired: true, result: { foo: "bar" } })
 
     const arrayResult = await tryWithLock("test-lock", async () => [1, 2, 3])
     expect(arrayResult).toEqual({ acquired: true, result: [1, 2, 3] })
 
-    const undefinedResult = await tryWithLock("test-lock", async () => undefined)
+    const undefinedResult = await tryWithLock(
+      "test-lock",
+      async () => undefined,
+    )
     expect(undefinedResult).toEqual({ acquired: true, result: undefined })
   })
 })
