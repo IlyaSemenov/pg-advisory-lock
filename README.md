@@ -1,23 +1,7 @@
 # pg-advisory-lock
 
-A TypeScript library for PostgreSQL advisory locks, providing distributed mutex functionality for Node.js applications.
-
-This is a modern rewrite of [advisory-lock](https://github.com/olalonde/advisory-lock) which seemed to be unmaintained.
-
-### What are PostgreSQL Advisory Locks?
-
-PostgreSQL advisory locks are application-level locks that use the database to coordinate access to shared resources. Unlike table-level locks, advisory locks:
-
-- Are completely controlled by your application
-- Don't lock any table data
-- Are automatically released when the database session ends
-- Can be used to implement distributed mutexes across multiple processes/servers
-
-### Use Cases
-
-- **Job Processing**: Ensure only one worker processes a specific job
-- **Database Migrations**: Coordinate schema changes across deployments
-- **Resource Initialization**: Ensure expensive resources are initialized only once
+`pg-advisory-lock` coordinates exclusive work between application instances through PostgreSQL session-level advisory locks.
+It is useful when the protected work includes external I/O, non-transactional operations, or multiple database transactions.
 
 ## Install
 
@@ -25,53 +9,72 @@ PostgreSQL advisory locks are application-level locks that use the database to c
 npm install pg-advisory-lock
 ```
 
-PostgreSQL 11 or newer is required.
+PostgreSQL 14 or newer is required.
+Use a direct connection or [PgBouncer session pooling](https://www.pgbouncer.org/features.html).
+PgBouncer transaction and statement pooling are unsupported.
 
-## Usage
+## Quick Start
 
-### Basic Usage
+Create one manager and reuse it for the lifetime of the application:
 
 ```ts
-import { createAdvisoryLock } from "pg-advisory-lock"
+import { createAdvisoryLockManager } from "pg-advisory-lock"
 
-const databaseUrl = "postgresql://user:pass@localhost/db"
-const { withLock } = createAdvisoryLock(databaseUrl)
+const locks = createAdvisoryLockManager(
+  "postgresql://user:pass@localhost/database",
+)
 
-await withLock("my-resource", async () => {
-  // Critical section - only one process can execute this at a time
-  console.log("Doing exclusive work...")
-  await someExclusiveWork()
-  // Lock is automatically released when function completes or throws
+await locks.withLock("db:migrate", async () => {
+  await runMigrations()
 })
+
+// During graceful shutdown:
+await locks.close()
 ```
 
-### Non-blocking Lock Attempts
+`withLock()` waits until the lock is available, runs the callback, and releases the lock whether the callback returns or throws.
+It has no built-in acquisition timeout.
+
+All applications using the same lock name in the same keyspace and connected to the same PostgreSQL database coordinate on the same advisory lock.
+
+## Locking Operations
+
+### Try Without Waiting
+
+Use `tryWithLock()` when unavailable work should be skipped instead of queued:
 
 ```ts
-const { tryWithLock } = createAdvisoryLock("postgresql://...")
-
-const result = await tryWithLock("my-resource", async () => {
-  // Lock available, do exclusive work
-  console.log("Lock acquired!")
-  return await someExclusiveWork()
+const result = await locks.tryWithLock("reports:refresh", async () => {
+  return await refreshReports()
 })
 
-if (result.acquired) {
-  console.log("Work completed:", result.result)
-} else {
-  console.log("Lock not available, skipping work")
+if (!result.acquired) {
+  console.log("Another worker is already refreshing reports")
 }
 ```
 
-### Manual Lock Lifecycle
+When acquired, the result is `{ acquired: true, result }`; otherwise it is `{ acquired: false }`.
 
-Use `tryLock` when an integration exposes separate before/after hooks instead of a callback or middleware boundary.
-While acquired, it holds both the advisory lock and its database connection until `unlock` is called.
-The returned `unlock` function is idempotent.
-Calling `tryLock` inside an active lock callback shares that callback's connection.
-`tryLock` does not establish a nesting context, so sequential `tryLock` calls use separate connections.
+### Reusable Helpers
 
-Store `unlock` in the framework context between hooks:
+Create a mutex when several call sites use the same logical name, or wrap a function that should always take a lock:
+
+```ts
+const mutex = locks.createMutex("search:index")
+await mutex.withLock(rebuildSearchIndex)
+
+const rebuildExclusively = locks.wrapWithLock(
+  "search:index",
+  rebuildSearchIndex,
+)
+```
+
+An `AdvisoryMutex` provides `withLock()`, `tryWithLock()`, `tryLock()`, and `wrapWithLock()`.
+
+### Manage a Lock Across Hooks
+
+Most code should use `withLock()` or `tryWithLock()` so release is automatic.
+Use `tryLock()` when a framework only provides separate before/after hooks:
 
 ```ts
 type LockContext = {
@@ -79,8 +82,8 @@ type LockContext = {
 }
 
 async function before(context: LockContext) {
-  context.unlock = await tryLock("my-resource")
-  if (!context.unlock) throw new Error("Resource is locked")
+  context.unlock = await locks.tryLock("imports:run")
+  if (!context.unlock) throw new Error("An import is already running")
 }
 
 async function after(context: LockContext) {
@@ -88,242 +91,131 @@ async function after(context: LockContext) {
 }
 ```
 
-Prefer `tryWithLock` when the protected work already fits inside one callback.
+A successful `tryLock()` reserves a connection until its idempotent unlock function is called.
+The integration must guarantee that the after hook runs even when the protected work fails.
 
-### Function Wrapping
+A top-level `tryLock()` does not create a nesting context for later operations.
+Another top-level operation uses a different connection and will wait or fail on the same lock until `unlock()` runs.
 
-You can wrap existing functions to automatically acquire locks before calling them:
+## Namespaces
 
-```ts
-import { createAdvisoryLock } from "pg-advisory-lock"
-
-const { wrapWithLock } = createAdvisoryLock("postgresql://...")
-
-// Original function (not thread-safe)
-async function sum(a: number, b: number) {
-  console.log(`Calculating ${a} + ${b}`)
-  return a + b
-}
-
-// Wrap it with a lock
-const lockingSum = wrapWithLock("calculator", sum)
-
-// Now calling lockingSum will automatically acquire the lock
-const result = await lockingSum(1, 2) // Lock acquired, function executed, lock released
-console.log(result) // 3
-```
-
-### Using a Mutex Instance
+Namespaces let different tenants or subsystems reuse the same logical lock names without coordinating with each other:
 
 ```ts
-import { createAdvisoryLock } from "pg-advisory-lock"
+const { withLock } = locks.namespace("tenant-a")
 
-const { createMutex } = createAdvisoryLock("postgresql://...")
-
-// Create a mutex instance
-const mutex = createMutex("my-resource")
-
-await mutex.withLock(async () => {
-  // Critical section - only one process can execute this at a time
-  console.log("Processing with mutex lock...")
-  await someExclusiveWork()
+await withLock("db:migrate", async () => {
+  await migrateTenant()
 })
 ```
 
-All other methods (`tryWithLock`, `tryLock`, `wrapWithLock`) are also available on the mutex instance.
+`locks.namespace("tenant-a")` and `locks.namespace("tenant-b")` create derived keyspaces.
+The same name within one keyspace resolves to the same advisory key, while different namespaces normally resolve it to different keys.
 
-### Custom Connection Options
-
-Instead of a connection string, you can pass native postgres.js options:
+Namespaces can be nested, and their order is significant:
 
 ```ts
-import { createAdvisoryLock } from "pg-advisory-lock"
+const jobLocks = locks.namespace("tenant-a").namespace("jobs")
+```
 
-const { withLock } = createAdvisoryLock({
+Derived keyspaces reuse the root manager's connection pool and lifecycle.
+Only the root manager exposes `close()`.
+
+## Connections and Lifecycle
+
+Passing a connection string or postgres.js options creates a postgres.js instance owned by the manager:
+
+```ts
+const locks = createAdvisoryLockManager({
   database: "app",
   host: "db.example.com",
   idle_timeout: 30,
   user: "app",
 })
-
-await withLock("my-resource", async () => {
-  // Your exclusive code here
-})
 ```
 
-### Using with an Existing postgres.js Instance
+You can instead share an existing postgres.js instance with application queries:
 
 ```ts
 import postgres from "postgres"
-import { createAdvisoryLock } from "pg-advisory-lock"
+import { createAdvisoryLockManager } from "pg-advisory-lock"
 
 const sql = postgres("postgresql://...")
-const locks = createAdvisoryLock(sql)
-
-try {
-  await locks.withLock("my-resource", async () => {
-    // Your exclusive code here
-  })
-} finally {
-  await locks.close()
-  await sql.end()
-}
+const locks = createAdvisoryLockManager(sql)
 ```
 
-### Closing
+Each top-level acquisition reserves one connection while waiting and for the duration of its callback, or until a manual lock is released.
+When application queries share the pool, lock waiters can exhaust it and prevent the current lock holder from finishing.
+Use a sufficiently large shared pool or a dedicated manager pool when contention is possible.
 
-Call `close()` during graceful shutdown to stop new lock acquisitions and wait for active locks to release.
-When the factory was created from a connection string or postgres.js options, `close()` also closes its internally created `postgres.Sql` instance.
-When an existing `postgres.Sql` instance was passed, it remains open and must be closed by its owner.
-Repeated calls return the same promise.
-After closing starts, new top-level acquisitions through the factory, existing mutexes, and wrapped functions reject with an error.
-Nested operations inside a callback that was already active may continue using its reserved connection.
+### Closing the Manager
 
-`close()` waits for a lock acquired by `tryLock`, so call its `unlock` function before awaiting shutdown completion.
-Calling `close()` from inside an active lock callback rejects to prevent waiting for the callback itself.
-
-## Lock Names and IDs
-
-Lock names are converted to signed 64-bit IDs by PostgreSQL using `hashtextextended(name COLLATE "C", 0)`.
-The explicit deterministic collation keeps key generation independent of the database's default collation.
-This means:
-
-- Clients using the same PostgreSQL server derive the same ID for the same name
-- Lock names are case-sensitive
-- Different names can theoretically produce the same ID because the key remains a 64-bit hash
-
-## Nested Locks
-
-The library supports nested lock calls with the same key within the same async context:
+Derived keyspaces, mutexes, and wrapped functions share the root manager's lifecycle.
+`close()` stops new top-level acquisitions and waits for existing acquisitions to finish.
+It closes a postgres.js instance created by the manager, but not one supplied by the caller:
 
 ```ts
-await withLock("my-resource", async () => {
-  console.log("Outer lock acquired")
+await locks.close()
+await sql.end()
+```
 
-  // This will not deadlock - it reuses the same database connection
-  await withLock("my-resource", async () => {
-    console.log("Nested lock acquired")
-    // Both locks are effectively held by the same connection
-  })
+Calling it inside an active lock callback rejects to avoid waiting for that callback itself.
+Shutdown may wait indefinitely for a blocking acquisition, an unfinished callback, or a forgotten manual lock.
+Release every successful `tryLock()` before awaiting shutdown.
 
-  console.log("Back to outer lock")
-  // Lock is released when the outermost function completes
+## Reentrant and Concurrent Calls
+
+Nested calls in the same active async context reuse its PostgreSQL session and are reentrant.
+The async context therefore acts as one owner, including for sibling calls:
+
+```ts
+await locks.withLock("resource", async () => {
+  await Promise.all([
+    locks.withLock("resource", task1),
+    locks.withLock("resource", task2),
+  ])
 })
 ```
 
-This connection reuse only applies within the same async execution context. Concurrent calls from different execution contexts will still properly block each other as expected.
+Both nested callbacks may overlap because they use the same lock-owning session.
+Nested calls are therefore not an additional in-process mutex.
+Independent top-level async contexts use separate sessions and coordinate through PostgreSQL.
 
-Connection reuse ends when the corresponding `withLock` callback completes.
-An asynchronous operation inherited from a completed callback acquires a new connection instead of reusing the released connection.
+## Failure Model
 
-## API
+If the lock-owning PostgreSQL session is lost, PostgreSQL releases the lock while its JavaScript callback may continue running.
+Another application instance can then acquire the same lock.
+The library therefore does not provide fencing or exactly-once execution.
+Use idempotency or fencing tokens when those guarantees are required.
 
-### `createAdvisoryLock(connection)`
+Locks coordinate only within one PostgreSQL database, not across databases, clusters, primaries, or replicas.
 
-Creates an advisory lock factory with methods for creating mutexes and acquiring locks.
+## Session-Level and Transaction-Level Locks
 
-- `connection`: A PostgreSQL connection string, native postgres.js options, or a `postgres.Sql` instance
+This library uses session-level locks because they can protect work outside a single database transaction.
+They remain held for the callback or until a manual lock is released.
 
-Returns an object with:
+When all protected work fits inside one transaction, PostgreSQL's `pg_advisory_xact_lock` may be simpler because it releases automatically at commit or rollback.
+Transaction-level locks and this manager have different lifecycles and are not interchangeable.
+The package does not promise common key derivation or automatic coordination between them.
 
-- `close()`: Stops new acquisitions, waits for active locks, and closes an internally created postgres.js instance
-- `createMutex(name)`: Creates a mutex for the given resource name
-- `withLock(name, fn)`: Convenience method to acquire a lock and execute a function
-- `tryWithLock(name, fn)`: Convenience method to attempt acquiring a lock and execute a function without blocking
-- `tryLock(name)`: Attempts to acquire a lock without blocking and returns an idempotent unlock function
-- `wrapWithLock(name, fn)`: Wraps a function to automatically acquire a lock before calling it
+## Lock Key Derivation
 
-### `close()`
+The root keyspace converts each name to a signed 64-bit key with `hashtextextended(name::text COLLATE "C", 0)`.
+Namespaces recursively derive the seed used to hash the name.
+Given `H(value, seed) = hashtextextended(value COLLATE "C", seed)`:
 
-Stops new lock acquisitions and waits for active callbacks and manual locks to release.
-It closes a `postgres.Sql` instance created from a connection string or options, but never closes an instance passed by the caller.
-Repeated calls return the same promise.
-New top-level acquisitions reject after closing starts, while active callbacks may continue nested operations on their reserved connection.
-Calling `close()` from an active lock callback rejects to prevent a self-deadlock.
+```ts
+locks.namespace("tenant-a").namespace("jobs")
+```
 
-### `createMutex(name)`
+uses `H(name, H("jobs", H("tenant-a", 0)))`.
 
-Creates a mutex for the given resource name.
+The `C` collation makes derivation independent of the database's default collation, and names remain case-sensitive.
+Different names or namespace chains can theoretically collide in the 64-bit keyspace.
+Treat derived numeric keys as an implementation detail.
+Do not persist them or use them as a cross-version interoperability contract.
 
-- `name`: A string identifier for the resource to lock
+## Acknowledgments
 
-Returns a `Mutex` instance.
-
-### `withLock(name, fn)`
-
-Convenience method that creates a mutex and immediately executes a function with the lock.
-
-- `name`: A string identifier for the resource to lock
-- `fn`: An async function to execute while holding the lock
-
-Returns the result of the function. The lock is released even if the function throws an error.
-
-### `tryWithLock(name, fn)`
-
-Convenience method that creates a mutex and attempts to acquire the lock without blocking, executing the function if successful.
-
-- `name`: A string identifier for the resource to lock
-- `fn`: An async function to execute while holding the lock
-
-Returns:
-
-- `{ acquired: false }` if the lock is not available
-- `{ acquired: true, result: T }` if the lock was acquired and the function executed successfully
-
-### `tryLock(name)`
-
-Creates a mutex and attempts to acquire the lock without blocking.
-The acquired lock and its database connection remain held until the returned idempotent unlock function is called.
-
-- `name`: A string identifier for the resource to lock
-
-Returns:
-
-- An unlock function if the lock was acquired
-- `undefined` if the lock is not available
-
-### `wrapWithLock(name, fn)`
-
-Wraps a function to automatically acquire a lock before calling it.
-
-- `name`: A string identifier for the resource to lock
-- `fn`: The function to wrap
-
-Returns a wrapped function that acquires the lock before calling the original function.
-
-### `mutex.withLock(fn)`
-
-Acquires the lock, executes the function, and automatically releases the lock.
-
-- `fn`: An async function to execute while holding the lock
-
-Returns the result of the function. The lock is released even if the function throws an error.
-
-### `mutex.tryWithLock(fn)`
-
-Attempts to acquire the lock without blocking and executes the provided function if successful.
-
-- `fn`: An async function to execute while holding the lock
-
-Returns:
-
-- `{ acquired: false }` if the lock is not available
-- `{ acquired: true, result: T }` if the lock was acquired and the function executed successfully
-
-### `mutex.tryLock()`
-
-Attempts to acquire the lock without blocking.
-The acquired lock and its database connection remain held until the returned idempotent unlock function is called.
-
-Returns:
-
-- An unlock function if the lock was acquired
-- `undefined` if the lock is not available
-
-### `mutex.wrapWithLock(fn)`
-
-Wraps a function to automatically acquire this mutex's lock before calling it.
-
-- `fn`: The function to wrap
-
-Returns a wrapped function that acquires the lock before calling the original function.
+Originally inspired by [advisory-lock](https://github.com/olalonde/advisory-lock).

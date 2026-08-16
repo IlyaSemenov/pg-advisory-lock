@@ -64,20 +64,6 @@ describe("test NestingPool", () => {
       expect(result).toBe("success")
     })
 
-    it("should properly release client when release is called", async () => {
-      const { client, release } = await nestingPool.getClient()
-
-      // Test that client is working
-      const queryResult = await client`SELECT 3 AS test`
-      expect(queryResult[0]?.test).toBe(3)
-
-      release()
-
-      // The client should be released back to the pool
-      // Note: The client object might still be usable, but it's been returned to the pool
-      expect(release).toBeDefined()
-    })
-
     it("should ignore repeated release calls", async () => {
       const { release } = await nestingPool.getClient()
 
@@ -297,10 +283,12 @@ describe("test NestingPool", () => {
 
       continueOrphanedOperation.resolve()
       const orphanedClient = await orphanedClientPromise
+      expect(activeConnections).toBe(1)
+
       const queryResult = await orphanedClient.client`SELECT 13 AS test`
       orphanedClient.release()
 
-      expect(orphanedClient.nested).toBe(false)
+      expect(activeConnections).toBe(0)
       expect(queryResult[0]?.test).toBe(13)
     })
 

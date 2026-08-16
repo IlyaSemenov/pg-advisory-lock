@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test"
 
-import { createAdvisoryLock } from "pg-advisory-lock"
+import { createAdvisoryLockManager } from "pg-advisory-lock"
 
 import { databaseUrl } from "#test-utils"
 
-const { createMutex, wrapWithLock } = createAdvisoryLock(databaseUrl)
+const { createMutex, wrapWithLock } = createAdvisoryLockManager(databaseUrl)
 
 describe("wrapWithLock", () => {
   it("wraps function and executes with lock", async () => {

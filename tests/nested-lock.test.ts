@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test"
 
-import { createAdvisoryLock } from "pg-advisory-lock"
+import { createAdvisoryLockManager } from "pg-advisory-lock"
 
 import { databaseUrl, sleep } from "#test-utils"
 
 const { createMutex, withLock, tryLock, tryWithLock } =
-  createAdvisoryLock(databaseUrl)
+  createAdvisoryLockManager(databaseUrl)
 
 test("withLock > withLock with same key", async () => {
   const result = await withLock("nested-test", async () => {

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "bun:test"
 
-import { createAdvisoryLock } from "pg-advisory-lock"
+import { createAdvisoryLockManager } from "pg-advisory-lock"
 import postgres from "postgres"
 
 import { databaseUrl } from "#test-utils"
 
-const closedError = "Advisory lock factory is closing or closed"
+const closedError = "Advisory lock manager is closing or closed"
 
 function connectionOptions() {
   const url = new URL(databaseUrl)
@@ -21,7 +21,7 @@ function connectionOptions() {
 describe("lifecycle", () => {
   it("closes an internally created postgres.js instance", async () => {
     let closedConnections = 0
-    const locks = createAdvisoryLock({
+    const locks = createAdvisoryLockManager({
       ...connectionOptions(),
       onclose: () => {
         closedConnections += 1
@@ -42,8 +42,9 @@ describe("lifecycle", () => {
 
   it("leaves a caller-owned postgres.js instance open", async () => {
     const sql = postgres(databaseUrl)
-    const locks = createAdvisoryLock(sql)
+    const locks = createAdvisoryLockManager(sql)
     const mutex = locks.createMutex("closed-mutex")
+    const namespace = locks.namespace("closed-namespace")
     const wrapped = locks.wrapWithLock("closed-wrapper", async () => "result")
 
     try {
@@ -53,6 +54,9 @@ describe("lifecycle", () => {
       await expect(mutex.withLock(async () => "unexpected")).rejects.toThrow(
         closedError,
       )
+      await expect(
+        namespace.withLock("closed-lock", async () => "unexpected"),
+      ).rejects.toThrow(closedError)
       await expect(wrapped()).rejects.toThrow(closedError)
 
       const result = await sql`SELECT 1 AS value`
@@ -64,7 +68,7 @@ describe("lifecycle", () => {
 
   it("waits for an active callback and allows its nested locks", async () => {
     const sql = postgres(databaseUrl)
-    const locks = createAdvisoryLock(sql)
+    const locks = createAdvisoryLockManager(sql)
     const callbackStarted = Promise.withResolvers<void>()
     const continueCallback = Promise.withResolvers<void>()
     let operation: Promise<void> | undefined
@@ -106,7 +110,7 @@ describe("lifecycle", () => {
 
   it("waits for a manual lock to be unlocked", async () => {
     const sql = postgres(databaseUrl)
-    const locks = createAdvisoryLock(sql)
+    const locks = createAdvisoryLockManager(sql)
     let unlock: (() => Promise<void>) | undefined
     let closing: Promise<void> | undefined
 
@@ -133,12 +137,12 @@ describe("lifecycle", () => {
 
   it("rejects close from an active lock context", async () => {
     const sql = postgres(databaseUrl)
-    const locks = createAdvisoryLock(sql)
+    const locks = createAdvisoryLockManager(sql)
 
     try {
       await locks.withLock("self-close", async () => {
         await expect(locks.close()).rejects.toThrow(
-          "Cannot close advisory lock factory from an active lock context",
+          "Cannot close advisory lock manager from an active lock context",
         )
       })
 
@@ -155,7 +159,7 @@ describe("lifecycle", () => {
 
   it("rejects close behind a completed nested lock context", async () => {
     const sql = postgres(databaseUrl)
-    const locks = createAdvisoryLock(sql)
+    const locks = createAdvisoryLockManager(sql)
     const resumeChild = Promise.withResolvers<void>()
     let child!: Promise<
       { error: unknown; status: "rejected" } | { status: "resolved" }
@@ -185,7 +189,7 @@ describe("lifecycle", () => {
         if (outcome.status === "rejected") {
           expect(outcome.error).toEqual(
             new Error(
-              "Cannot close advisory lock factory from an active lock context",
+              "Cannot close advisory lock manager from an active lock context",
             ),
           )
         }

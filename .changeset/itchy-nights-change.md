@@ -2,4 +2,4 @@
 "pg-advisory-lock": minor
 ---
 
-Accept custom pool options for `createAdvisoryLock()`.
+Accept native postgres.js options for `createAdvisoryLockManager()`.

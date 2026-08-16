@@ -23,6 +23,14 @@ Do not catalog files or restate information evident from their names and locatio
 - Preserve nested-lock connection reuse through the current async context.
 - Keep successful lock and unlock control queries rowless; postgres.js row transforms run after PostgreSQL changes session lock state.
 - Keep PostgreSQL tests non-concurrent because they share a database and lock names.
+- Treat `AdvisoryLockKeyspace` as a configured mapping from logical lock names to PostgreSQL advisory keys.
+- Keep connection ownership and `close()` on the root `AdvisoryLockManager`; derived keyspaces share its pool and lifecycle.
+
+## Naming
+
+- Name same-kind entities after their distinct scenario roles when those roles differ.
+- Use numeric suffixes such as `entity1`, `entity2`, `rubricId1`, and `rubricId2` for entities that differ only by order.
+- Do not use ordinal prefixes such as `first`, `second`, or `third` for numbered entities.
 
 ## Documentation
 
@@ -36,6 +44,7 @@ Do not catalog files or restate information evident from their names and locatio
 ## Changesets
 
 - Add one `.changeset/*.md` file for each independently releasable user-visible change.
+- Treat existing changesets as historical records and never rewrite them to reflect later API or terminology changes.
 - Do not add changesets for internal refactors, maintenance, tests, or documentation changes that do not require a package release.
 - Choose the SemVer bump from the public contract: `patch` for backward-compatible fixes, `minor` for backward-compatible functionality, and `major` for breaking changes.
 - Create `.changeset/<unique-name>.md` with this format:

@@ -2,21 +2,51 @@ import type { ReservedSql } from "postgres"
 
 import type { NestingPool } from "./pool"
 
+/**
+ * The discriminated result of a non-blocking lock attempt with a callback.
+ */
 export type TryWithLockResult<T> =
   | { acquired: false }
   | { acquired: true; result: T }
 
-export class AdvisoryLockMutex {
+/**
+ * A reusable mutex bound to one logical advisory lock name and its namespaces.
+ */
+export interface AdvisoryMutex {
+  tryLock(): Promise<(() => Promise<void>) | undefined>
+  tryWithLock<T>(fn: () => PromiseLike<T>): Promise<TryWithLockResult<T>>
+  withLock<T>(fn: () => PromiseLike<T>): Promise<T>
+  wrapWithLock<TArgs extends readonly unknown[], TReturn>(
+    fn: (...args: TArgs) => PromiseLike<TReturn>,
+  ): (...args: TArgs) => Promise<TReturn>
+}
+
+class PostgresAdvisoryMutex implements AdvisoryMutex {
   private readonly name: string
+  private readonly namespaces: readonly string[]
   private readonly pool: NestingPool
 
-  constructor(pool: NestingPool, name: string) {
+  constructor(
+    pool: NestingPool,
+    name: string,
+    namespaces: readonly string[] = [],
+  ) {
     this.name = name
+    this.namespaces = namespaces
     this.pool = pool
   }
 
   private lockKey(client: ReservedSql) {
-    return client`hashtextextended(${this.name}::text COLLATE "C", 0)`
+    const zero = client`0`
+    const hash = (value: string, seed: typeof zero) =>
+      client`hashtextextended(${value}::text COLLATE "C", ${seed})`
+
+    let seed = zero
+    for (const namespace of this.namespaces) {
+      seed = hash(namespace, seed)
+    }
+
+    return hash(this.name, seed)
   }
 
   private async lock(client: ReservedSql): Promise<void> {
@@ -117,12 +147,10 @@ export class AdvisoryLockMutex {
           return unlockPromise
         }
       } else {
-        // Lock not available, release the client immediately
         release()
         return undefined
       }
     } catch (error) {
-      // On error, release the client and re-throw
       release()
       throw error
     }
@@ -139,4 +167,13 @@ export class AdvisoryLockMutex {
   ): (...args: TArgs) => Promise<TReturn> {
     return async (...args: TArgs) => this.withLock(() => fn(...args))
   }
+}
+
+/** Creates a mutex bound to a logical name and namespace chain. */
+export function createAdvisoryMutex(
+  pool: NestingPool,
+  name: string,
+  namespaces: readonly string[] = [],
+): AdvisoryMutex {
+  return new PostgresAdvisoryMutex(pool, name, namespaces)
 }

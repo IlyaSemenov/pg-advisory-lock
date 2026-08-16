@@ -1,12 +1,12 @@
 import { describe, expect, it } from "bun:test"
 
-import { createAdvisoryLock } from "pg-advisory-lock"
+import { createAdvisoryLockManager } from "pg-advisory-lock"
 
 import { databaseUrl, sleep } from "#test-utils"
 
-const { createMutex, tryWithLock } = createAdvisoryLock(databaseUrl)
+const { createMutex, tryWithLock } = createAdvisoryLockManager(databaseUrl)
 const { tryWithLock: independentlyTryWithLock } =
-  createAdvisoryLock(databaseUrl)
+  createAdvisoryLockManager(databaseUrl)
 
 describe("mutex.tryWithLock", () => {
   it("executes function and returns result when lock is available", async () => {

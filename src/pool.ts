@@ -6,7 +6,6 @@ export type NestingPoolClient = {
   client: ReservedSql
   /** Must be called to release this acquisition; calls after the first have no effect. */
   release: () => void
-  nested: boolean
 }
 
 type Connection = {
@@ -24,7 +23,6 @@ type ConnectionContext = {
 type AcquiredConnection = {
   connection: Connection
   release: () => void
-  nested: boolean
 }
 
 /**
@@ -47,8 +45,8 @@ export class NestingPool {
    * Creates a new client, or reuses an existing client from the AsyncLocalStorage.
    */
   async getClient(): Promise<NestingPoolClient> {
-    const { connection, release, nested } = await this.acquireConnection()
-    return { client: connection.client, release, nested }
+    const { connection, release } = await this.acquireConnection()
+    return { client: connection.client, release }
   }
 
   private activeConnectionContext(): ConnectionContext | undefined {
@@ -64,30 +62,28 @@ export class NestingPool {
       return {
         connection: context.connection,
         release: this.createRelease(context.connection),
-        nested: true,
       }
-    } else {
-      if (this.closing) {
-        throw new Error("Advisory lock factory is closing or closed")
-      }
+    }
 
-      this.activeConnections += 1
-      try {
-        const client = await this.pool.reserve()
-        const connection: Connection = {
-          client,
-          references: 1,
-          release: () => client.release(),
-        }
-        return {
-          connection,
-          release: this.createRelease(connection),
-          nested: false,
-        }
-      } catch (error) {
-        this.finishConnection()
-        throw error
+    if (this.closing) {
+      throw new Error("Advisory lock manager is closing or closed")
+    }
+
+    this.activeConnections += 1
+    try {
+      const client = await this.pool.reserve()
+      const connection: Connection = {
+        client,
+        references: 1,
+        release: () => client.release(),
       }
+      return {
+        connection,
+        release: this.createRelease(connection),
+      }
+    } catch (error) {
+      this.finishConnection()
+      throw error
     }
   }
 
@@ -126,7 +122,7 @@ export class NestingPool {
     if (this.activeConnectionContext()) {
       return Promise.reject(
         new Error(
-          "Cannot close advisory lock factory from an active lock context",
+          "Cannot close advisory lock manager from an active lock context",
         ),
       )
     }

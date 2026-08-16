@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 
-import { createAdvisoryLock } from "pg-advisory-lock"
+import { createAdvisoryLockManager } from "pg-advisory-lock"
 
 import { databaseUrl, sleep } from "#test-utils"
 
@@ -13,7 +13,7 @@ function promiseWithResolve<T>() {
 
 test("lock for longer than idle_timeout", async () => {
   const url = new URL(databaseUrl)
-  const { withLock } = createAdvisoryLock({
+  const { withLock } = createAdvisoryLockManager({
     database: url.pathname.slice(1) || undefined,
     host: url.hostname,
     idle_timeout: 0.01,

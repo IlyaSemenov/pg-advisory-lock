@@ -1,12 +1,18 @@
 import { describe, expectTypeOf, test } from "bun:test"
 
-import { createAdvisoryLock } from "pg-advisory-lock"
+import {
+  type AdvisoryLockKeyspace,
+  type AdvisoryLockManager,
+  type AdvisoryMutex,
+  createAdvisoryLockManager,
+  type TryWithLockResult,
+} from "pg-advisory-lock"
 import postgres from "postgres"
 
 import { databaseUrl } from "#test-utils"
 
 describe("wrapWithLock type tests", () => {
-  const { wrapWithLock } = createAdvisoryLock(databaseUrl)
+  const { wrapWithLock } = createAdvisoryLockManager(databaseUrl)
 
   test("should preserve function signature with multiple parameters", () => {
     const originalFunction = async (a: number, b: string, c: boolean) => {
@@ -115,7 +121,7 @@ describe("wrapWithLock type tests", () => {
 })
 
 describe("mutex.wrapWithLock type tests", () => {
-  const { createMutex } = createAdvisoryLock(databaseUrl)
+  const { createMutex } = createAdvisoryLockManager(databaseUrl)
 
   test("should preserve function signature for mutex instance", () => {
     const mutex = createMutex("test-resource")
@@ -155,19 +161,19 @@ describe("mutex.wrapWithLock type tests", () => {
   })
 })
 
-describe("createAdvisoryLock return type tests", () => {
+describe("createAdvisoryLockManager return type tests", () => {
   test("should accept postgres.js connection types", async () => {
     const sql = postgres(databaseUrl, { types: { bigint: postgres.BigInt } })
 
-    createAdvisoryLock(databaseUrl)
-    createAdvisoryLock({ max: 1 })
-    createAdvisoryLock(sql)
+    createAdvisoryLockManager(databaseUrl)
+    createAdvisoryLockManager({ max: 1 })
+    createAdvisoryLockManager(sql)
 
     await sql.end()
   })
 
   test("should include wrapWithLock in the return type", () => {
-    const result = createAdvisoryLock(databaseUrl)
+    const result = createAdvisoryLockManager(databaseUrl)
 
     expectTypeOf(result.close).toEqualTypeOf<() => Promise<void>>()
     expectTypeOf(result).toHaveProperty("wrapWithLock")
@@ -176,11 +182,30 @@ describe("createAdvisoryLock return type tests", () => {
     expectTypeOf(result.wrapWithLock).parameter(1).toBeFunction()
     expectTypeOf(result.wrapWithLock).returns.toBeFunction()
   })
+
+  test("should expose manager, keyspace, and mutex types", () => {
+    const manager = createAdvisoryLockManager(databaseUrl)
+    const namespace = manager.namespace("tenant-a")
+    const mutex = namespace.createMutex("job")
+
+    expectTypeOf(manager).toEqualTypeOf<AdvisoryLockManager>()
+    expectTypeOf(namespace).toEqualTypeOf<AdvisoryLockKeyspace>()
+    expectTypeOf(mutex).toEqualTypeOf<AdvisoryMutex>()
+    expectTypeOf(mutex.tryWithLock(async () => "done")).toEqualTypeOf<
+      Promise<TryWithLockResult<string>>
+    >()
+
+    // @ts-expect-error derived keyspaces do not own the manager lifecycle
+    void namespace.close
+
+    // @ts-expect-error scope was replaced by namespace
+    void manager.scope
+  })
 })
 
 describe("type assignability tests", () => {
   test("should preserve assignability", () => {
-    const { wrapWithLock } = createAdvisoryLock(databaseUrl)
+    const { wrapWithLock } = createAdvisoryLockManager(databaseUrl)
 
     const originalFunction = async (x: number) => x * 2
     const wrappedFunction = wrapWithLock("test", originalFunction)

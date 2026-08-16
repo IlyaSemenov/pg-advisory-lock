@@ -1,20 +1,20 @@
 import { describe, expect, test } from "bun:test"
 
-import { createAdvisoryLock } from "pg-advisory-lock"
+import { createAdvisoryLockManager } from "pg-advisory-lock"
 import postgres from "postgres"
 
 import { databaseUrl } from "#test-utils"
 
-describe("createAdvisoryLock connection types", () => {
+describe("createAdvisoryLockManager connection types", () => {
   test("connection with string", async () => {
-    const { withLock } = createAdvisoryLock(databaseUrl)
+    const { withLock } = createAdvisoryLockManager(databaseUrl)
     const result = await withLock("test", async () => "success")
     expect(result).toBe("success")
   })
 
   test("connection with options", async () => {
     const url = new URL(databaseUrl)
-    const { withLock } = createAdvisoryLock({
+    const { withLock } = createAdvisoryLockManager({
       database: url.pathname.slice(1) || undefined,
       host: url.hostname,
       pass: url.password || undefined,
@@ -28,7 +28,7 @@ describe("createAdvisoryLock connection types", () => {
   test("connection with existing sql instance", async () => {
     const sql = postgres(databaseUrl)
     try {
-      const { withLock } = createAdvisoryLock(sql)
+      const { withLock } = createAdvisoryLockManager(sql)
       const result = await withLock("test", async () => "success")
       expect(result).toBe("success")
     } finally {

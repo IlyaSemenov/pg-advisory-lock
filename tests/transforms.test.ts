@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test"
 
-import { createAdvisoryLock } from "pg-advisory-lock"
+import {
+  type AdvisoryLockManager,
+  createAdvisoryLockManager,
+} from "pg-advisory-lock"
 import postgres from "postgres"
 
 import { databaseUrl } from "#test-utils"
@@ -21,7 +24,7 @@ function optionsWithTransform(transform: Transform) {
 }
 
 async function expectManualLockLifecycle(
-  locks: ReturnType<typeof createAdvisoryLock>,
+  locks: AdvisoryLockManager,
   name: string,
 ) {
   const unlock = await locks.tryLock(name)
@@ -50,8 +53,8 @@ describe("postgres.js transforms", () => {
       },
     })
     const observerSql = postgres(databaseUrl, { max: 1 })
-    const locks = createAdvisoryLock(transformedSql)
-    const observerLocks = createAdvisoryLock(observerSql)
+    const locks = createAdvisoryLockManager(transformedSql)
+    const observerLocks = createAdvisoryLockManager(observerSql)
 
     try {
       const result = await locks.tryWithLock(
@@ -83,7 +86,7 @@ describe("postgres.js transforms", () => {
   })
 
   test("supports transforms passed through manager options", async () => {
-    const locks = createAdvisoryLock(
+    const locks = createAdvisoryLockManager(
       optionsWithTransform({
         column: {
           from: (name) =>
@@ -101,15 +104,19 @@ describe("postgres.js transforms", () => {
       }),
     )
 
-    const result = await locks.tryWithLock(
-      "transformed-options",
-      async () => "success",
-    )
-    expect(result).toEqual({ acquired: true, result: "success" })
-    expect(await locks.withLock("transformed-with-lock", async () => 42)).toBe(
-      42,
-    )
-    await expectManualLockLifecycle(locks, "transformed-manual-lock")
+    try {
+      const result = await locks.tryWithLock(
+        "transformed-options",
+        async () => "success",
+      )
+      expect(result).toEqual({ acquired: true, result: "success" })
+      expect(
+        await locks.withLock("transformed-with-lock", async () => 42),
+      ).toBe(42)
+      await expectManualLockLifecycle(locks, "transformed-manual-lock")
+    } finally {
+      await locks.close()
+    }
   })
 
   test("ignores transformed boolean values from an existing Sql", async () => {
@@ -126,8 +133,8 @@ describe("postgres.js transforms", () => {
         },
       },
     })
-    const holderLocks = createAdvisoryLock(holderSql)
-    const transformedLocks = createAdvisoryLock(transformedSql)
+    const holderLocks = createAdvisoryLockManager(holderSql)
+    const transformedLocks = createAdvisoryLockManager(transformedSql)
     const unlock = await holderLocks.tryLock("transformed-unavailable-lock")
 
     try {
@@ -160,7 +167,7 @@ describe("postgres.js transforms", () => {
         },
       },
     })
-    const locks = createAdvisoryLock(sql)
+    const locks = createAdvisoryLockManager(sql)
 
     try {
       await expectManualLockLifecycle(locks, "transformed-unlock")

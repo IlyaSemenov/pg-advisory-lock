@@ -1,28 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 
-import { createAdvisoryLock } from "pg-advisory-lock"
+import { createAdvisoryLockManager } from "pg-advisory-lock"
 import postgres from "postgres"
 
 import { databaseUrl } from "#test-utils"
 
 describe("tryLock lifecycle", () => {
-  let firstPool: postgres.Sql
-  let secondPool: postgres.Sql
-  let firstLocks: ReturnType<typeof createAdvisoryLock>
-  let secondLocks: ReturnType<typeof createAdvisoryLock>
+  let contenderLocks: ReturnType<typeof createAdvisoryLockManager>
+  let contenderPool: postgres.Sql
+  let holderLocks: ReturnType<typeof createAdvisoryLockManager>
+  let holderPool: postgres.Sql
   let unlocks: Array<() => Promise<void>>
 
   beforeEach(() => {
-    firstPool = postgres(databaseUrl, { max: 1 })
-    secondPool = postgres(databaseUrl, { max: 1 })
-    firstLocks = createAdvisoryLock(firstPool)
-    secondLocks = createAdvisoryLock(secondPool)
+    contenderPool = postgres(databaseUrl, { max: 1 })
+    holderPool = postgres(databaseUrl, { max: 1 })
+    contenderLocks = createAdvisoryLockManager(contenderPool)
+    holderLocks = createAdvisoryLockManager(holderPool)
     unlocks = []
   })
 
   afterEach(async () => {
     await Promise.allSettled(unlocks.map((unlock) => unlock()))
-    await Promise.all([firstPool.end(), secondPool.end()])
+    await Promise.all([contenderPool.end(), holderPool.end()])
   })
 
   async function acquireLock(lock: Promise<(() => Promise<void>) | undefined>) {
@@ -33,13 +33,13 @@ describe("tryLock lifecycle", () => {
   }
 
   it("holds the lock and connection until unlock", async () => {
-    const unlock = await acquireLock(firstLocks.tryLock("manual-lifecycle"))
-    const secondMutex = secondLocks.createMutex("manual-lifecycle")
+    const unlock = await acquireLock(holderLocks.tryLock("manual-lifecycle"))
+    const contenderMutex = contenderLocks.createMutex("manual-lifecycle")
 
-    const blockedUnlock = await secondMutex.tryLock()
+    const blockedUnlock = await contenderMutex.tryLock()
 
     expect(blockedUnlock).toBeUndefined()
-    const releasedAttempt = await secondLocks.tryWithLock(
+    const releasedAttempt = await contenderLocks.tryWithLock(
       "available-after-failed-attempt",
       async () => "success",
     )
@@ -47,8 +47,8 @@ describe("tryLock lifecycle", () => {
 
     await unlock()
 
-    await acquireLock(secondMutex.tryLock())
-    const releasedConnection = await firstLocks.tryWithLock(
+    await acquireLock(contenderMutex.tryLock())
+    const releasedConnection = await holderLocks.tryWithLock(
       "available-after-unlock",
       async () => "success",
     )
@@ -56,16 +56,16 @@ describe("tryLock lifecycle", () => {
   })
 
   it("allows repeated and concurrent unlock calls", async () => {
-    const unlock = await acquireLock(firstLocks.tryLock("idempotent-unlock"))
+    const unlock = await acquireLock(holderLocks.tryLock("idempotent-unlock"))
 
     await Promise.all([unlock(), unlock(), unlock()])
 
-    const acquired = await secondLocks.tryWithLock(
+    const acquired = await contenderLocks.tryWithLock(
       "idempotent-unlock",
       async () => "success",
     )
     expect(acquired).toEqual({ acquired: true, result: "success" })
-    const releasedConnection = await firstLocks.tryWithLock(
+    const releasedConnection = await holderLocks.tryWithLock(
       "available-after-idempotent-unlock",
       async () => "success",
     )
@@ -75,11 +75,11 @@ describe("tryLock lifecycle", () => {
   it("keeps a nested manual lock after the outer callback completes", async () => {
     let unlock: (() => Promise<void>) | undefined
 
-    await firstLocks.withLock("nested-manual-lock", async () => {
-      unlock = await acquireLock(firstLocks.tryLock("nested-manual-lock"))
+    await holderLocks.withLock("nested-manual-lock", async () => {
+      unlock = await acquireLock(holderLocks.tryLock("nested-manual-lock"))
     })
 
-    const blocked = await secondLocks.tryWithLock(
+    const blocked = await contenderLocks.tryWithLock(
       "nested-manual-lock",
       async () => "unexpected",
     )
@@ -87,7 +87,7 @@ describe("tryLock lifecycle", () => {
 
     await unlock?.()
 
-    const acquired = await secondLocks.tryWithLock(
+    const acquired = await contenderLocks.tryWithLock(
       "nested-manual-lock",
       async () => "success",
     )
