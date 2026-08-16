@@ -1,7 +1,9 @@
 import { createAdvisoryLockKey } from "./key"
 import type { NestingPool } from "./pool"
 
-export type TryWithLockResult<T> = { acquired: false } | { acquired: true, result: T }
+export type TryWithLockResult<T> =
+  | { acquired: false }
+  | { acquired: true; result: T }
 
 export class AdvisoryLockMutex {
   private readonly pool: NestingPool
@@ -35,10 +37,15 @@ export class AdvisoryLockMutex {
    *  - `{ acquired: false }` if the lock is not available
    *  - `{ acquired: true, result: T }` if the lock was acquired and the function executed
    */
-  async tryWithLock<T>(fn: () => PromiseLike<T>): Promise<TryWithLockResult<T>> {
+  async tryWithLock<T>(
+    fn: () => PromiseLike<T>,
+  ): Promise<TryWithLockResult<T>> {
     return await this.pool.withClient(async (client) => {
       // Try to acquire the advisory lock (non-blocking)
-      const result = await client.query<{ acquired: boolean }>("SELECT pg_try_advisory_lock($1) as acquired", [this.lockKey])
+      const result = await client.query<{ acquired: boolean }>(
+        "SELECT pg_try_advisory_lock($1) as acquired",
+        [this.lockKey],
+      )
       const acquired = result.rows[0]?.acquired
       if (acquired) {
         try {
@@ -55,26 +62,40 @@ export class AdvisoryLockMutex {
   /**
    * Attempts to acquire the lock without blocking.
    *
-   * @returns an unlock function if successful, or `undefined` if the lock is not available.
+   * The returned unlock function is idempotent and must be called to release the lock and its connection.
    *
-   * @deprecated Use `tryWithLock` instead. This method does not work reliably for nested locks.
+   * @returns an unlock function if successful, or `undefined` if the lock is not available.
    */
   async tryLock(): Promise<(() => Promise<void>) | undefined> {
     const { client, release } = await this.pool.getClient()
 
     try {
       // Try to acquire the advisory lock (non-blocking)
-      const result = await client.query<{ acquired: boolean }>("SELECT pg_try_advisory_lock($1) as acquired", [this.lockKey])
+      const result = await client.query<{ acquired: boolean }>(
+        "SELECT pg_try_advisory_lock($1) as acquired",
+        [this.lockKey],
+      )
       const acquired = result.rows[0]?.acquired
 
       if (acquired) {
-        // Return unlock function that releases the lock and releases the client
-        return async () => {
-          try {
-            await client.query("SELECT pg_advisory_unlock($1)", [this.lockKey])
-          } finally {
-            release()
-          }
+        let unlockPromise: Promise<void> | undefined
+        return () => {
+          unlockPromise ??= (async () => {
+            try {
+              const result = await client.query<{ unlocked: boolean }>(
+                "SELECT pg_advisory_unlock($1) as unlocked",
+                [this.lockKey],
+              )
+              if (!result.rows[0]?.unlocked) {
+                throw new Error(
+                  "Advisory lock is no longer held by its connection",
+                )
+              }
+            } finally {
+              release()
+            }
+          })()
+          return unlockPromise
         }
       } else {
         // Lock not available, release the client immediately

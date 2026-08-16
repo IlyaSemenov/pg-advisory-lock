@@ -61,27 +61,32 @@ if (result.acquired) {
 }
 ```
 
-### Non-blocking Legacy API
+### Manual Lock Lifecycle
 
-For compatibility with `advisory-lock`, this library includes the low-level `tryLock` method:
+Use `tryLock` when an integration exposes separate before/after hooks instead of a callback or middleware boundary.
+While acquired, it holds both the advisory lock and its database connection until `unlock` is called.
+The returned `unlock` function is idempotent.
+Calling `tryLock` inside an active lock callback shares that callback's connection.
+`tryLock` does not establish a nesting context, so sequential `tryLock` calls use separate connections.
+
+Store `unlock` in the framework context between hooks:
 
 ```ts
-const { tryLock } = createAdvisoryLock("postgresql://...")
+type LockContext = {
+  unlock?: () => Promise<void>
+}
 
-const unlock = await tryLock("my-resource")
-if (unlock) {
-  try {
-    // Lock available, do exclusive work
-    console.log("Lock acquired!")
-  } finally {
-    await unlock()
-  }
-} else {
-  console.log("Lock not available, skipping work")
+async function before(context: LockContext) {
+  context.unlock = await tryLock("my-resource")
+  if (!context.unlock) throw new Error("Resource is locked")
+}
+
+async function after(context: LockContext) {
+  await context.unlock?.()
 }
 ```
 
-Using `tryWithLock` is recommended over this method as it automatically handles lock cleanup and provides a cleaner API.
+Prefer `tryWithLock` when the protected work already fits inside one callback.
 
 ### Function Wrapping
 
@@ -201,7 +206,7 @@ Returns an object with:
 - `createMutex(name)`: Creates a mutex for the given resource name
 - `withLock(name, fn)`: Convenience method to acquire a lock and execute a function
 - `tryWithLock(name, fn)`: Convenience method to attempt acquiring a lock and execute a function without blocking
-- `tryLock(name)`: Low-level method to attempt acquiring a lock without blocking (discouraged, use `tryWithLock` instead)
+- `tryLock(name)`: Attempts to acquire a lock without blocking and returns an idempotent unlock function
 - `wrapWithLock(name, fn)`: Wraps a function to automatically acquire a lock before calling it
 
 ### `createMutex(name)`
@@ -235,7 +240,8 @@ Returns:
 
 ### `tryLock(name)`
 
-Low-level convenience method that creates a mutex and attempts to acquire the lock without blocking. **Note**: Using `tryWithLock` is recommended instead.
+Creates a mutex and attempts to acquire the lock without blocking.
+The acquired lock and its database connection remain held until the returned idempotent unlock function is called.
 
 - `name`: A string identifier for the resource to lock
 
@@ -274,7 +280,8 @@ Returns:
 
 ### `mutex.tryLock()`
 
-Low-level method that attempts to acquire the lock without blocking. **Note**: Using `tryWithLock` is recommended instead.
+Attempts to acquire the lock without blocking.
+The acquired lock and its database connection remain held until the returned idempotent unlock function is called.
 
 Returns:
 

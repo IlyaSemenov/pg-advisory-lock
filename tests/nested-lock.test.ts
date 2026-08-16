@@ -66,15 +66,11 @@ test("tryWithLock > tryWithLock with same key", async () => {
   })
 })
 
-// It's not clear if this should work at all.
-// How do we know the calls are actually "nested"?
-// How do we precisely define the concept of "nesting"?
-test.failing("tryLock > tryLock with same key", async () => {
+test("sequential tryLock calls are independent", async () => {
   const unlock1 = await tryLock("nested-trylock-test")
   expect(unlock1).toBeDefined()
   const unlock2 = await tryLock("nested-trylock-test")
-  expect(unlock2).toBeDefined()
-  await unlock2?.()
+  expect(unlock2).toBeUndefined()
   await unlock1?.()
 })
 
