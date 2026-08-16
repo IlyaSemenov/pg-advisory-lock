@@ -1,17 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 
-import { Pool } from "pg"
+import postgres from "postgres"
 
 import { databaseUrl, sleep } from "#test-utils"
 
 import { NestingPool } from "./pool"
 
 describe("test NestingPool", () => {
-  let pool: Pool
+  let pool: postgres.Sql
   let nestingPool: NestingPool
+  let activeConnections: number
 
   beforeEach(() => {
-    pool = new Pool({ connectionString: databaseUrl })
+    pool = postgres(databaseUrl)
+    activeConnections = 0
+    const reserve = pool.reserve.bind(pool)
+    pool.reserve = async () => {
+      const client = await reserve()
+      const release = client.release.bind(client)
+      activeConnections += 1
+      client.release = () => {
+        activeConnections -= 1
+        release()
+      }
+      return client
+    }
     nestingPool = new NestingPool(pool)
   })
 
@@ -27,8 +40,8 @@ describe("test NestingPool", () => {
       expect(typeof result.release).toBe("function")
 
       // Test that the client can actually query
-      const queryResult = await result.client.query("SELECT 1 as test")
-      expect(queryResult.rows[0].test).toBe(1)
+      const queryResult = await result.client`SELECT 1 AS test`
+      expect(queryResult[0]?.test).toBe(1)
 
       result.release()
     })
@@ -41,8 +54,8 @@ describe("test NestingPool", () => {
         expect(nestedResult.client).toBe(outerClient)
 
         // Test that the client can actually query
-        const queryResult = await nestedResult.client.query("SELECT 2 as test")
-        expect(queryResult.rows[0].test).toBe(2)
+        const queryResult = await nestedResult.client`SELECT 2 AS test`
+        expect(queryResult[0]?.test).toBe(2)
 
         nestedResult.release()
         return "success"
@@ -55,8 +68,8 @@ describe("test NestingPool", () => {
       const { client, release } = await nestingPool.getClient()
 
       // Test that client is working
-      const queryResult = await client.query("SELECT 3 as test")
-      expect(queryResult.rows[0].test).toBe(3)
+      const queryResult = await client`SELECT 3 AS test`
+      expect(queryResult[0]?.test).toBe(3)
 
       release()
 
@@ -71,19 +84,19 @@ describe("test NestingPool", () => {
       release()
       release()
 
-      expect(pool.idleCount).toBe(1)
+      expect(activeConnections).toBe(0)
     })
   })
 
   describe("withClient", () => {
     it("should execute function with client and release it", async () => {
       const result = await nestingPool.withClient(async (client) => {
-        const queryResult = await client.query("SELECT 4 as test")
-        return queryResult.rows[0].test
+        const queryResult = await client`SELECT 4 AS test`
+        return queryResult[0]?.test
       })
 
       expect(result).toBe(4)
-      expect(pool.idleCount).toBe(1)
+      expect(activeConnections).toBe(0)
     })
 
     it("should release client even when function throws", async () => {
@@ -94,12 +107,12 @@ describe("test NestingPool", () => {
           throw mockError
         }),
       ).rejects.toThrow("test error")
-      expect(pool.idleCount).toBe(1)
+      expect(activeConnections).toBe(0)
 
       // Should be able to use the pool again
       const result = await nestingPool.withClient(async (client) => {
-        const queryResult = await client.query("SELECT 5 as test")
-        return queryResult.rows[0].test
+        const queryResult = await client`SELECT 5 AS test`
+        return queryResult[0]?.test
       })
 
       expect(result).toBe(5)
@@ -111,16 +124,16 @@ describe("test NestingPool", () => {
         const nestedResult = await nestingPool.withClient(
           async (nestedClient) => {
             expect(nestedClient).toBe(outerClient) // Should be the same client
-            const queryResult = await nestedClient.query("SELECT 6 as test")
-            return queryResult.rows[0].test
+            const queryResult = await nestedClient`SELECT 6 AS test`
+            return queryResult[0]?.test
           },
         )
 
         expect(nestedResult).toBe(6)
 
         // Test that outer client is still working
-        const queryResult = await outerClient.query("SELECT 7 as test")
-        return queryResult.rows[0].test
+        const queryResult = await outerClient`SELECT 7 AS test`
+        return queryResult[0]?.test
       })
 
       expect(result).toBe(7)
@@ -135,13 +148,13 @@ describe("test NestingPool", () => {
           async (client) => client,
         )
 
-        expect(pool.idleCount).toBe(0)
+        expect(activeConnections).toBe(1)
         return { outerClient, firstClient, secondClient }
       })
 
       expect(clients.firstClient).toBe(clients.outerClient)
       expect(clients.secondClient).toBe(clients.outerClient)
-      expect(pool.idleCount).toBe(1)
+      expect(activeConnections).toBe(0)
     })
 
     it("should reuse the client across concurrent nested calls", async () => {
@@ -162,7 +175,7 @@ describe("test NestingPool", () => {
         })
 
         await Promise.all([firstStarted.promise, secondStarted.promise])
-        const idleWhileNested = pool.idleCount
+        const activeWhileNested = activeConnections
         finishNested.resolve()
 
         const [firstClient, secondClient] = await Promise.all([
@@ -173,16 +186,16 @@ describe("test NestingPool", () => {
           outerClient,
           firstClient,
           secondClient,
-          idleWhileNested,
-          idleAfterNested: pool.idleCount,
+          activeWhileNested,
+          activeAfterNested: activeConnections,
         }
       })
 
       expect(clients.firstClient).toBe(clients.outerClient)
       expect(clients.secondClient).toBe(clients.outerClient)
-      expect(clients.idleWhileNested).toBe(0)
-      expect(clients.idleAfterNested).toBe(0)
-      expect(pool.idleCount).toBe(1)
+      expect(clients.activeWhileNested).toBe(1)
+      expect(clients.activeAfterNested).toBe(1)
+      expect(activeConnections).toBe(0)
     })
 
     it("should handle multiple nested levels correctly", async () => {
@@ -194,20 +207,20 @@ describe("test NestingPool", () => {
             const level3Result = await nestingPool.withClient(
               async (level3Client) => {
                 expect(level3Client).toBe(level1Client)
-                const queryResult = await level3Client.query("SELECT 8 as test")
-                return queryResult.rows[0].test
+                const queryResult = await level3Client`SELECT 8 AS test`
+                return queryResult[0]?.test
               },
             )
 
             expect(level3Result).toBe(8)
-            const queryResult = await level2Client.query("SELECT 9 as test")
-            return queryResult.rows[0].test
+            const queryResult = await level2Client`SELECT 9 AS test`
+            return queryResult[0]?.test
           },
         )
 
         expect(level2Result).toBe(9)
-        const queryResult = await level1Client.query("SELECT 10 as test")
-        return queryResult.rows[0].test
+        const queryResult = await level1Client`SELECT 10 AS test`
+        return queryResult[0]?.test
       })
 
       expect(result).toBe(10)
@@ -225,7 +238,7 @@ describe("test NestingPool", () => {
       secondClient.release()
 
       expect(firstClient.client).not.toBe(secondClient.client)
-      expect(pool.idleCount).toBe(2)
+      expect(activeConnections).toBe(0)
     })
 
     it("should keep the client acquired while a nested context is active", async () => {
@@ -241,12 +254,12 @@ describe("test NestingPool", () => {
         await nestedStarted.promise
       })
 
-      expect(pool.idleCount).toBe(0)
+      expect(activeConnections).toBe(1)
 
       finishNested.resolve()
       await nestedOperation
 
-      expect(pool.idleCount).toBe(1)
+      expect(activeConnections).toBe(0)
     })
 
     it("should find an active parent behind a completed nested context", async () => {
@@ -265,10 +278,10 @@ describe("test NestingPool", () => {
 
         resumeChild.resolve()
         expect(await childOperation).toBe(true)
-        expect(pool.idleCount).toBe(0)
+        expect(activeConnections).toBe(1)
       })
 
-      expect(pool.idleCount).toBe(1)
+      expect(activeConnections).toBe(0)
     })
 
     it("should not reuse a client from a completed async context", async () => {
@@ -284,28 +297,28 @@ describe("test NestingPool", () => {
 
       continueOrphanedOperation.resolve()
       const orphanedClient = await orphanedClientPromise
-      const queryResult = await orphanedClient.client.query("SELECT 13 as test")
+      const queryResult = await orphanedClient.client`SELECT 13 AS test`
       orphanedClient.release()
 
       expect(orphanedClient.nested).toBe(false)
-      expect(queryResult.rows[0].test).toBe(13)
+      expect(queryResult[0]?.test).toBe(13)
     })
 
     it("should maintain separate contexts for different async operations", async () => {
       const operation1 = async () => {
         const { client, release } = await nestingPool.getClient()
         await sleep(10)
-        const result = await client.query("SELECT 11 as test")
+        const result = await client`SELECT 11 AS test`
         release()
-        return result.rows[0].test
+        return result[0]?.test
       }
 
       const operation2 = async () => {
         const { client, release } = await nestingPool.getClient()
         await sleep(10)
-        const result = await client.query("SELECT 12 as test")
+        const result = await client`SELECT 12 AS test`
         release()
-        return result.rows[0].test
+        return result[0]?.test
       }
 
       // Run operations concurrently

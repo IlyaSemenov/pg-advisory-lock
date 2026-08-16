@@ -1,16 +1,16 @@
 import { AsyncLocalStorage } from "node:async_hooks"
 
-import type { Pool, PoolClient } from "pg"
+import type { ReservedSql, Sql } from "postgres"
 
 export type NestingPoolClient = {
-  client: PoolClient
+  client: ReservedSql
   /** Must be called to release this acquisition; calls after the first have no effect. */
   release: () => void
   nested: boolean
 }
 
 type Connection = {
-  client: PoolClient
+  client: ReservedSql
   references: number
   release: () => void
 }
@@ -28,10 +28,10 @@ type AcquiredConnection = {
 }
 
 /**
- * An extension of the `Pool` class that allows for nested connections.
+ * A wrapper around a postgres.js pool that allows for nested connections.
  */
 export class NestingPool {
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Sql) {}
 
   connectionStorage = new AsyncLocalStorage<ConnectionContext>()
 
@@ -59,7 +59,7 @@ export class NestingPool {
         nested: true,
       }
     } else {
-      const client = await this.pool.connect()
+      const client = await this.pool.reserve()
       const connection: Connection = {
         client,
         references: 1,
@@ -94,7 +94,7 @@ export class NestingPool {
    *
    * For nested lock calls, the client is reused from the AsyncLocalStorage.
    */
-  async withClient<T>(fn: (client: PoolClient) => Promise<T>) {
+  async withClient<T>(fn: (client: ReservedSql) => Promise<T>) {
     const { connection, release } = await this.acquireConnection()
     const context: ConnectionContext = {
       connection,

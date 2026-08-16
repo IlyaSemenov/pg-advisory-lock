@@ -1,6 +1,7 @@
 import { describe, expectTypeOf, test } from "bun:test"
 
 import { createAdvisoryLock } from "pg-advisory-lock"
+import postgres from "postgres"
 
 import { databaseUrl } from "#test-utils"
 
@@ -155,6 +156,16 @@ describe("mutex.wrapWithLock type tests", () => {
 })
 
 describe("createAdvisoryLock return type tests", () => {
+  test("should accept postgres.js connection types", async () => {
+    const sql = postgres(databaseUrl, { types: { bigint: postgres.BigInt } })
+
+    createAdvisoryLock(databaseUrl)
+    createAdvisoryLock({ max: 1 })
+    createAdvisoryLock(sql)
+
+    await sql.end()
+  })
+
   test("should include wrapWithLock in the return type", () => {
     const result = createAdvisoryLock(databaseUrl)
 

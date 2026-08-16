@@ -1,21 +1,20 @@
-// pg is a CommonJS package, so for ESM compatibility it must be imported as a default import
-import pg from "pg"
+import postgres from "postgres"
 
 import type { TryWithLockResult } from "./mutex"
 import { AdvisoryLockMutex } from "./mutex"
 import { NestingPool } from "./pool"
 
+type PostgresOptions = postgres.Options<Record<string, postgres.PostgresType>>
+
 export function createAdvisoryLock(
-  connection: string | pg.PoolConfig | pg.Pool,
+  connection: string | PostgresOptions | postgres.Sql,
 ) {
   const basePool =
-    connection instanceof pg.Pool
+    typeof connection === "function"
       ? connection
-      : new pg.Pool(
-          typeof connection === "object"
-            ? connection
-            : { connectionString: connection },
-        )
+      : typeof connection === "string"
+        ? postgres(connection)
+        : postgres(connection)
 
   const pool = new NestingPool(basePool)
 

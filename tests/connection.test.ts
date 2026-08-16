@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
-import pg from "pg"
 import { createAdvisoryLock } from "pg-advisory-lock"
+import postgres from "postgres"
 
 import { databaseUrl } from "#test-utils"
 
@@ -13,19 +13,26 @@ describe("createAdvisoryLock connection types", () => {
   })
 
   test("connection with options", async () => {
-    const { withLock } = createAdvisoryLock({ connectionString: databaseUrl })
+    const url = new URL(databaseUrl)
+    const { withLock } = createAdvisoryLock({
+      database: url.pathname.slice(1) || undefined,
+      host: url.hostname,
+      pass: url.password || undefined,
+      port: url.port ? Number(url.port) : undefined,
+      user: url.username || undefined,
+    })
     const result = await withLock("test", async () => "success")
     expect(result).toBe("success")
   })
 
-  test("should throw with default pool idleTimeoutMillis", async () => {
-    const pool = new pg.Pool({ connectionString: databaseUrl })
+  test("connection with existing sql instance", async () => {
+    const sql = postgres(databaseUrl)
     try {
-      const { withLock } = createAdvisoryLock(pool)
+      const { withLock } = createAdvisoryLock(sql)
       const result = await withLock("test", async () => "success")
       expect(result).toBe("success")
     } finally {
-      await pool.end()
+      await sql.end()
     }
   })
 })

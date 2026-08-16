@@ -1,20 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 
-import { Pool } from "pg"
 import { createAdvisoryLock } from "pg-advisory-lock"
+import postgres from "postgres"
 
 import { databaseUrl } from "#test-utils"
 
 describe("tryLock lifecycle", () => {
-  let firstPool: Pool
-  let secondPool: Pool
+  let firstPool: postgres.Sql
+  let secondPool: postgres.Sql
   let firstLocks: ReturnType<typeof createAdvisoryLock>
   let secondLocks: ReturnType<typeof createAdvisoryLock>
   let unlocks: Array<() => Promise<void>>
 
   beforeEach(() => {
-    firstPool = new Pool({ connectionString: databaseUrl, max: 1 })
-    secondPool = new Pool({ connectionString: databaseUrl, max: 1 })
+    firstPool = postgres(databaseUrl, { max: 1 })
+    secondPool = postgres(databaseUrl, { max: 1 })
     firstLocks = createAdvisoryLock(firstPool)
     secondLocks = createAdvisoryLock(secondPool)
     unlocks = []
@@ -39,13 +39,20 @@ describe("tryLock lifecycle", () => {
     const blockedUnlock = await secondMutex.tryLock()
 
     expect(blockedUnlock).toBeUndefined()
-    expect(firstPool.idleCount).toBe(0)
-    expect(secondPool.idleCount).toBe(1)
+    const releasedAttempt = await secondLocks.tryWithLock(
+      "available-after-failed-attempt",
+      async () => "success",
+    )
+    expect(releasedAttempt).toEqual({ acquired: true, result: "success" })
 
     await unlock()
 
     await acquireLock(secondMutex.tryLock())
-    expect(firstPool.idleCount).toBe(1)
+    const releasedConnection = await firstLocks.tryWithLock(
+      "available-after-unlock",
+      async () => "success",
+    )
+    expect(releasedConnection).toEqual({ acquired: true, result: "success" })
   })
 
   it("allows repeated and concurrent unlock calls", async () => {
@@ -58,7 +65,11 @@ describe("tryLock lifecycle", () => {
       async () => "success",
     )
     expect(acquired).toEqual({ acquired: true, result: "success" })
-    expect(firstPool.idleCount).toBe(1)
+    const releasedConnection = await firstLocks.tryWithLock(
+      "available-after-idempotent-unlock",
+      async () => "success",
+    )
+    expect(releasedConnection).toEqual({ acquired: true, result: "success" })
   })
 
   it("keeps a nested manual lock after the outer callback completes", async () => {

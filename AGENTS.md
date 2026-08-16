@@ -21,6 +21,7 @@ Do not catalog files or restate information evident from their names and locatio
 
 - Preserve the database session while an advisory lock is held.
 - Preserve nested-lock connection reuse through the current async context.
+- Keep successful lock and unlock control queries rowless; postgres.js row transforms run after PostgreSQL changes session lock state.
 - Keep PostgreSQL tests non-concurrent because they share a database and lock names.
 
 ## Documentation

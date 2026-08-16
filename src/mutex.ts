@@ -1,3 +1,5 @@
+import type { ReservedSql } from "postgres"
+
 import { createAdvisoryLockKey } from "./key"
 import type { NestingPool } from "./pool"
 
@@ -14,18 +16,49 @@ export class AdvisoryLockMutex {
     this.lockKey = createAdvisoryLockKey(name)
   }
 
+  private async lock(client: ReservedSql): Promise<void> {
+    await client`
+      SELECT
+      FROM (SELECT pg_advisory_lock(${this.lockKey.toString()})) AS control
+      OFFSET 1
+    `
+  }
+
+  private async tryToLock(client: ReservedSql): Promise<boolean> {
+    const result = await client`
+      SELECT
+      FROM (
+        SELECT pg_try_advisory_lock(${this.lockKey.toString()}) AS succeeded
+      ) AS control
+      -- Keep success rowless: postgres.js row transforms can throw after acquisition.
+      WHERE NOT succeeded
+    `
+    return result.count === 0
+  }
+
+  private async unlock(client: ReservedSql): Promise<boolean> {
+    const result = await client`
+      SELECT
+      FROM (
+        SELECT pg_advisory_unlock(${this.lockKey.toString()}) AS succeeded
+      ) AS control
+      -- Keep success rowless: postgres.js row transforms can throw after release.
+      WHERE NOT succeeded
+    `
+    return result.count === 0
+  }
+
   /**
    * Acquires the lock and executes the provided function.
    */
   async withLock<T>(fn: () => PromiseLike<T>): Promise<T> {
     return await this.pool.withClient(async (client) => {
-      // Acquire the advisory lock (blocks until available)
-      await client.query("SELECT pg_advisory_lock($1)", [this.lockKey])
+      await this.lock(client)
 
       try {
         return await fn()
       } finally {
-        await client.query("SELECT pg_advisory_unlock($1)", [this.lockKey])
+        await this.unlock(client)
       }
     })
   }
@@ -41,17 +74,11 @@ export class AdvisoryLockMutex {
     fn: () => PromiseLike<T>,
   ): Promise<TryWithLockResult<T>> {
     return await this.pool.withClient(async (client) => {
-      // Try to acquire the advisory lock (non-blocking)
-      const result = await client.query<{ acquired: boolean }>(
-        "SELECT pg_try_advisory_lock($1) as acquired",
-        [this.lockKey],
-      )
-      const acquired = result.rows[0]?.acquired
-      if (acquired) {
+      if (await this.tryToLock(client)) {
         try {
           return { acquired: true, result: await fn() }
         } finally {
-          await client.query("SELECT pg_advisory_unlock($1)", [this.lockKey])
+          await this.unlock(client)
         }
       } else {
         return { acquired: false }
@@ -70,23 +97,12 @@ export class AdvisoryLockMutex {
     const { client, release } = await this.pool.getClient()
 
     try {
-      // Try to acquire the advisory lock (non-blocking)
-      const result = await client.query<{ acquired: boolean }>(
-        "SELECT pg_try_advisory_lock($1) as acquired",
-        [this.lockKey],
-      )
-      const acquired = result.rows[0]?.acquired
-
-      if (acquired) {
+      if (await this.tryToLock(client)) {
         let unlockPromise: Promise<void> | undefined
         return () => {
           unlockPromise ??= (async () => {
             try {
-              const result = await client.query<{ unlocked: boolean }>(
-                "SELECT pg_advisory_unlock($1) as unlocked",
-                [this.lockKey],
-              )
-              if (!result.rows[0]?.unlocked) {
+              if (!(await this.unlock(client))) {
                 throw new Error(
                   "Advisory lock is no longer held by its connection",
                 )

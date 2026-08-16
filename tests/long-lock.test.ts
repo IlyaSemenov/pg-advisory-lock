@@ -11,10 +11,15 @@ function promiseWithResolve<T>() {
   return { promise, resolve }
 }
 
-test("lock for longer than idleTimeoutMillis", async () => {
+test("lock for longer than idle_timeout", async () => {
+  const url = new URL(databaseUrl)
   const { withLock } = createAdvisoryLock({
-    connectionString: databaseUrl,
-    idleTimeoutMillis: 10,
+    database: url.pathname.slice(1) || undefined,
+    host: url.hostname,
+    idle_timeout: 0.01,
+    pass: url.password || undefined,
+    port: url.port ? Number(url.port) : undefined,
+    user: url.username || undefined,
   })
 
   const { promise, resolve } = promiseWithResolve<string>()

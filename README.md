@@ -132,14 +132,16 @@ All other methods (`tryWithLock`, `tryLock`, `wrapWithLock`) are also available 
 
 ### Custom Connection Options
 
-Instead of the connection string, you can pass the pool options:
+Instead of a connection string, you can pass native postgres.js options:
 
 ```ts
 import { createAdvisoryLock } from "pg-advisory-lock"
 
 const { withLock } = createAdvisoryLock({
-  connectionString: "postgresql://...",
-  idleTimeoutMillis: 30000,
+  database: "app",
+  host: "db.example.com",
+  idle_timeout: 30,
+  user: "app",
 })
 
 await withLock("my-resource", async () => {
@@ -147,18 +149,22 @@ await withLock("my-resource", async () => {
 })
 ```
 
-### Using with Existing Connection Pool
+### Using with an Existing postgres.js Instance
 
 ```ts
-import { Pool } from "pg"
+import postgres from "postgres"
 import { createAdvisoryLock } from "pg-advisory-lock"
 
-const pool = new Pool({ connectionString: "postgresql://..." })
-const { withLock } = createAdvisoryLock(pool)
+const sql = postgres("postgresql://...")
+const { withLock } = createAdvisoryLock(sql)
 
-await withLock("my-resource", async () => {
-  // Your exclusive code here
-})
+try {
+  await withLock("my-resource", async () => {
+    // Your exclusive code here
+  })
+} finally {
+  await sql.end()
+}
 ```
 
 ## Lock Names and IDs
@@ -199,7 +205,7 @@ An asynchronous operation inherited from a completed callback acquires a new con
 
 Creates an advisory lock factory with methods for creating mutexes and acquiring locks.
 
-- `connection`: Either a PostgreSQL connection string or a `pg.Pool` instance
+- `connection`: A PostgreSQL connection string, native postgres.js options, or a `postgres.Sql` instance
 
 Returns an object with:
 
