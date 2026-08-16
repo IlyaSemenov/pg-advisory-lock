@@ -5,6 +5,8 @@ import { createAdvisoryLock } from "pg-advisory-lock"
 import { databaseUrl, sleep } from "#test-utils"
 
 const { createMutex, tryWithLock } = createAdvisoryLock(databaseUrl)
+const { tryWithLock: independentlyTryWithLock } =
+  createAdvisoryLock(databaseUrl)
 
 describe("mutex.tryWithLock", () => {
   it("executes function and returns result when lock is available", async () => {
@@ -22,6 +24,7 @@ describe("mutex.tryWithLock", () => {
 
   it("returns acquired: false when lock is not available", async () => {
     const mutex = createMutex("test-lock")
+    let secondCallbackExecuted = false
 
     const [result1, result2] = await Promise.all([
       mutex.tryWithLock(async () => {
@@ -30,6 +33,7 @@ describe("mutex.tryWithLock", () => {
       }),
       sleep(1).then(() =>
         mutex.tryWithLock(async () => {
+          secondCallbackExecuted = true
           return "second"
         }),
       ),
@@ -37,6 +41,7 @@ describe("mutex.tryWithLock", () => {
 
     expect(result1).toEqual({ acquired: true, result: "first" })
     expect(result2).toEqual({ acquired: false })
+    expect(secondCallbackExecuted).toBe(false)
   })
 
   it("releases lock even when function throws", async () => {
@@ -48,8 +53,10 @@ describe("mutex.tryWithLock", () => {
       }),
     ).rejects.toThrow("test error")
 
-    // Should be able to acquire the lock again
-    const result = await mutex.tryWithLock(async () => "success")
+    const result = await independentlyTryWithLock(
+      "test-lock",
+      async () => "success",
+    )
     expect(result).toEqual({ acquired: true, result: "success" })
   })
 
@@ -134,8 +141,10 @@ describe("convenience tryWithLock", () => {
       }),
     ).rejects.toThrow("test error")
 
-    // Should be able to acquire the lock again
-    const result = await tryWithLock("test-lock", async () => "success")
+    const result = await independentlyTryWithLock(
+      "test-lock",
+      async () => "success",
+    )
     expect(result).toEqual({ acquired: true, result: "success" })
   })
 

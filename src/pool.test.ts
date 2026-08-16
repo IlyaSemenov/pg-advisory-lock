@@ -83,6 +83,7 @@ describe("test NestingPool", () => {
       })
 
       expect(result).toBe(4)
+      expect(pool.idleCount).toBe(1)
     })
 
     it("should release client even when function throws", async () => {
@@ -93,6 +94,7 @@ describe("test NestingPool", () => {
           throw mockError
         }),
       ).rejects.toThrow("test error")
+      expect(pool.idleCount).toBe(1)
 
       // Should be able to use the pool again
       const result = await nestingPool.withClient(async (client) => {
@@ -213,6 +215,19 @@ describe("test NestingPool", () => {
   })
 
   describe("asyncLocalStorage behavior", () => {
+    it("should use different clients for independent concurrent acquisitions", async () => {
+      const [firstClient, secondClient] = await Promise.all([
+        nestingPool.getClient(),
+        nestingPool.getClient(),
+      ])
+
+      firstClient.release()
+      secondClient.release()
+
+      expect(firstClient.client).not.toBe(secondClient.client)
+      expect(pool.idleCount).toBe(2)
+    })
+
     it("should keep the client acquired while a nested context is active", async () => {
       const nestedStarted = Promise.withResolvers<void>()
       const finishNested = Promise.withResolvers<void>()
