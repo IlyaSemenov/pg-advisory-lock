@@ -1,6 +1,5 @@
 import type { ReservedSql } from "postgres"
 
-import { createAdvisoryLockKey } from "./key"
 import type { NestingPool } from "./pool"
 
 export type TryWithLockResult<T> =
@@ -8,18 +7,22 @@ export type TryWithLockResult<T> =
   | { acquired: true; result: T }
 
 export class AdvisoryLockMutex {
+  private readonly name: string
   private readonly pool: NestingPool
-  private readonly lockKey: bigint
 
   constructor(pool: NestingPool, name: string) {
+    this.name = name
     this.pool = pool
-    this.lockKey = createAdvisoryLockKey(name)
+  }
+
+  private lockKey(client: ReservedSql) {
+    return client`hashtextextended(${this.name}::text COLLATE "C", 0)`
   }
 
   private async lock(client: ReservedSql): Promise<void> {
     await client`
       SELECT
-      FROM (SELECT pg_advisory_lock(${this.lockKey.toString()})) AS control
+      FROM (SELECT pg_advisory_lock(${this.lockKey(client)})) AS control
       OFFSET 1
     `
   }
@@ -28,7 +31,7 @@ export class AdvisoryLockMutex {
     const result = await client`
       SELECT
       FROM (
-        SELECT pg_try_advisory_lock(${this.lockKey.toString()}) AS succeeded
+        SELECT pg_try_advisory_lock(${this.lockKey(client)}) AS succeeded
       ) AS control
       -- Keep success rowless: postgres.js row transforms can throw after acquisition.
       WHERE NOT succeeded
@@ -40,7 +43,7 @@ export class AdvisoryLockMutex {
     const result = await client`
       SELECT
       FROM (
-        SELECT pg_advisory_unlock(${this.lockKey.toString()}) AS succeeded
+        SELECT pg_advisory_unlock(${this.lockKey(client)}) AS succeeded
       ) AS control
       -- Keep success rowless: postgres.js row transforms can throw after release.
       WHERE NOT succeeded

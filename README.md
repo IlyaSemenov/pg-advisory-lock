@@ -25,6 +25,8 @@ PostgreSQL advisory locks are application-level locks that use the database to c
 npm install pg-advisory-lock
 ```
 
+PostgreSQL 11 or newer is required.
+
 ## Usage
 
 ### Basic Usage
@@ -182,11 +184,13 @@ Calling `close()` from inside an active lock callback rejects to prevent waiting
 
 ## Lock Names and IDs
 
-Lock names are converted to numeric IDs using a hash function (namely, 64-bit `djb2`). This means:
+Lock names are converted to signed 64-bit IDs by PostgreSQL using `hashtextextended(name COLLATE "C", 0)`.
+The explicit deterministic collation keeps key generation independent of the database's default collation.
+This means:
 
-- The same name will always produce the same lock ID
-- Different names will (very likely) produce different lock IDs
+- Clients using the same PostgreSQL server derive the same ID for the same name
 - Lock names are case-sensitive
+- Different names can theoretically produce the same ID because the key remains a 64-bit hash
 
 ## Nested Locks
 
@@ -323,9 +327,3 @@ Wraps a function to automatically acquire this mutex's lock before calling it.
 - `fn`: The function to wrap
 
 Returns a wrapped function that acquires the lock before calling the original function.
-
-### `createAdvisoryLockKey(str)`
-
-Generates a lock key from a string.
-
-Returns a 64-bit signed `BigInt`.
