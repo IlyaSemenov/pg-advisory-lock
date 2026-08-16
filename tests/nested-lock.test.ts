@@ -127,6 +127,23 @@ test("deeply nested withLock", async () => {
   expect(result).toBe("deep-success")
 })
 
+test("child of a completed nested callback reuses the active outer context", async () => {
+  const resumeChild = Promise.withResolvers<void>()
+  let child!: Promise<Awaited<ReturnType<typeof tryWithLock<string>>>>
+
+  await withLock("active-parent-test", async () => {
+    await withLock("completed-child-test", async () => {
+      child = (async () => {
+        await resumeChild.promise
+        return tryWithLock("active-parent-test", async () => "success")
+      })()
+    })
+
+    resumeChild.resolve()
+    expect(await child).toEqual({ acquired: true, result: "success" })
+  })
+})
+
 test("concurrent withLock", async () => {
   let log = ""
 

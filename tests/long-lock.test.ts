@@ -11,8 +11,7 @@ function promiseWithResolve<T>() {
   return { promise, resolve }
 }
 
-// This is not supported for now.
-test.failing("lock for longer than idleTimeoutMillis", async () => {
+test("lock for longer than idleTimeoutMillis", async () => {
   const { withLock } = createAdvisoryLock({
     connectionString: databaseUrl,
     idleTimeoutMillis: 10,
@@ -22,7 +21,6 @@ test.failing("lock for longer than idleTimeoutMillis", async () => {
 
   const result = await withLock("lock1", async () => {
     sleep(100).then(async () => {
-      // Error: Client was closed and is not queryable
       const nestedResult = await withLock(
         "lock2",
         async () => "nested-success",
