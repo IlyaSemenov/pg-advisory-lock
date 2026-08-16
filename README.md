@@ -156,16 +156,29 @@ import postgres from "postgres"
 import { createAdvisoryLock } from "pg-advisory-lock"
 
 const sql = postgres("postgresql://...")
-const { withLock } = createAdvisoryLock(sql)
+const locks = createAdvisoryLock(sql)
 
 try {
-  await withLock("my-resource", async () => {
+  await locks.withLock("my-resource", async () => {
     // Your exclusive code here
   })
 } finally {
+  await locks.close()
   await sql.end()
 }
 ```
+
+### Closing
+
+Call `close()` during graceful shutdown to stop new lock acquisitions and wait for active locks to release.
+When the factory was created from a connection string or postgres.js options, `close()` also closes its internally created `postgres.Sql` instance.
+When an existing `postgres.Sql` instance was passed, it remains open and must be closed by its owner.
+Repeated calls return the same promise.
+After closing starts, new top-level acquisitions through the factory, existing mutexes, and wrapped functions reject with an error.
+Nested operations inside a callback that was already active may continue using its reserved connection.
+
+`close()` waits for a lock acquired by `tryLock`, so call its `unlock` function before awaiting shutdown completion.
+Calling `close()` from inside an active lock callback rejects to prevent waiting for the callback itself.
 
 ## Lock Names and IDs
 
@@ -209,11 +222,20 @@ Creates an advisory lock factory with methods for creating mutexes and acquiring
 
 Returns an object with:
 
+- `close()`: Stops new acquisitions, waits for active locks, and closes an internally created postgres.js instance
 - `createMutex(name)`: Creates a mutex for the given resource name
 - `withLock(name, fn)`: Convenience method to acquire a lock and execute a function
 - `tryWithLock(name, fn)`: Convenience method to attempt acquiring a lock and execute a function without blocking
 - `tryLock(name)`: Attempts to acquire a lock without blocking and returns an idempotent unlock function
 - `wrapWithLock(name, fn)`: Wraps a function to automatically acquire a lock before calling it
+
+### `close()`
+
+Stops new lock acquisitions and waits for active callbacks and manual locks to release.
+It closes a `postgres.Sql` instance created from a connection string or options, but never closes an instance passed by the caller.
+Repeated calls return the same promise.
+New top-level acquisitions reject after closing starts, while active callbacks may continue nested operations on their reserved connection.
+Calling `close()` from an active lock callback rejects to prevent a self-deadlock.
 
 ### `createMutex(name)`
 

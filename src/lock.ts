@@ -9,6 +9,7 @@ type PostgresOptions = postgres.Options<Record<string, postgres.PostgresType>>
 export function createAdvisoryLock(
   connection: string | PostgresOptions | postgres.Sql,
 ) {
+  const ownsPool = typeof connection !== "function"
   const basePool =
     typeof connection === "function"
       ? connection
@@ -16,7 +17,10 @@ export function createAdvisoryLock(
         ? postgres(connection)
         : postgres(connection)
 
-  const pool = new NestingPool(basePool)
+  const pool = new NestingPool(
+    basePool,
+    ownsPool ? () => basePool.end() : undefined,
+  )
 
   /**
    * Creates a new mutex.
@@ -76,5 +80,14 @@ export function createAdvisoryLock(
     return createMutex(name).wrapWithLock(fn)
   }
 
-  return { createMutex, withLock, tryLock, tryWithLock, wrapWithLock }
+  /**
+   * Stops new lock acquisitions, waits for active locks, and closes an internally created postgres.js instance.
+   *
+   * An existing `postgres.Sql` instance remains owned by the caller.
+   */
+  function close(): Promise<void> {
+    return pool.close()
+  }
+
+  return { close, createMutex, withLock, tryLock, tryWithLock, wrapWithLock }
 }

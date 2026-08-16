@@ -169,6 +169,7 @@ describe("createAdvisoryLock return type tests", () => {
   test("should include wrapWithLock in the return type", () => {
     const result = createAdvisoryLock(databaseUrl)
 
+    expectTypeOf(result.close).toEqualTypeOf<() => Promise<void>>()
     expectTypeOf(result).toHaveProperty("wrapWithLock")
     expectTypeOf(result.wrapWithLock).toBeFunction()
     expectTypeOf(result.wrapWithLock).parameter(0).toBeString()

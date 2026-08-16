@@ -31,7 +31,15 @@ type AcquiredConnection = {
  * A wrapper around a postgres.js pool that allows for nested connections.
  */
 export class NestingPool {
-  constructor(private readonly pool: Sql) {}
+  private activeConnections = 0
+  private closePromise: Promise<void> | undefined
+  private closing = false
+  private resolveIdle: (() => void) | undefined
+
+  constructor(
+    private readonly pool: Sql,
+    private readonly closePool?: () => Promise<void>,
+  ) {}
 
   connectionStorage = new AsyncLocalStorage<ConnectionContext>()
 
@@ -59,16 +67,26 @@ export class NestingPool {
         nested: true,
       }
     } else {
-      const client = await this.pool.reserve()
-      const connection: Connection = {
-        client,
-        references: 1,
-        release: () => client.release(),
+      if (this.closing) {
+        throw new Error("Advisory lock factory is closing or closed")
       }
-      return {
-        connection,
-        release: this.createRelease(connection),
-        nested: false,
+
+      this.activeConnections += 1
+      try {
+        const client = await this.pool.reserve()
+        const connection: Connection = {
+          client,
+          references: 1,
+          release: () => client.release(),
+        }
+        return {
+          connection,
+          release: this.createRelease(connection),
+          nested: false,
+        }
+      } catch (error) {
+        this.finishConnection()
+        throw error
       }
     }
   }
@@ -84,7 +102,49 @@ export class NestingPool {
 
   private releaseConnection(connection: Connection) {
     connection.references -= 1
-    if (connection.references === 0) connection.release()
+    if (connection.references === 0) {
+      try {
+        connection.release()
+      } finally {
+        this.finishConnection()
+      }
+    }
+  }
+
+  private finishConnection() {
+    this.activeConnections -= 1
+    if (this.activeConnections === 0) {
+      this.resolveIdle?.()
+      this.resolveIdle = undefined
+    }
+  }
+
+  /**
+   * Stops new acquisitions and closes the pool after active connections are released.
+   */
+  close(): Promise<void> {
+    if (this.activeConnectionContext()) {
+      return Promise.reject(
+        new Error(
+          "Cannot close advisory lock factory from an active lock context",
+        ),
+      )
+    }
+
+    this.closePromise ??= this.closeWhenIdle()
+    return this.closePromise
+  }
+
+  private async closeWhenIdle() {
+    this.closing = true
+
+    if (this.activeConnections > 0) {
+      await new Promise<void>((resolve) => {
+        this.resolveIdle = resolve
+      })
+    }
+
+    await this.closePool?.()
   }
 
   /**
