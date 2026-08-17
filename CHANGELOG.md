@@ -1,5 +1,29 @@
 # pg-advisory-lock
 
+## 2.0.0
+
+### Major Changes
+
+- 2d0ce0e: Replace the `pg` driver with `postgres.js`.
+  `createAdvisoryLockManager` now accepts a connection string, native postgres.js options, or an existing `postgres.Sql` instance.
+- c6e2d42: Rename the factory and public types to `createAdvisoryLockManager`, `AdvisoryLockManager`, `AdvisoryLockKeyspace`, and `AdvisoryMutex`; create mutex instances through `createMutex()` rather than a public constructor.
+  Add composable `namespace` keyspaces that fold string namespaces into the PostgreSQL hash seed in call order.
+- 582b3a8: Generate advisory lock keys in PostgreSQL with `hashtextextended` and a deterministic collation.
+  Remove the public `createAdvisoryLockKey` function and its client-side DJB2 implementation.
+
+### Minor Changes
+
+- 792166a: Accept native postgres.js options for `createAdvisoryLockManager()`.
+- 2e84ae5: Add `close()` for graceful advisory lock manager shutdown.
+  It stops new acquisitions, waits for active locks, and closes only postgres.js instances created by the library.
+
+### Patch Changes
+
+- 5a59020: Fix nested `tryWithLock`.
+- a305048: Stabilize `tryLock` as a supported manual-lifecycle API.
+  Unlock functions are now idempotent and report when their connection no longer owns the lock.
+- 029e3fb: Avoid reusing a released connection from an inherited async context.
+
 ## 1.4.0
 
 ### Minor Changes
