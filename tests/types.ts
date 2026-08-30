@@ -7,6 +7,10 @@ import {
   createAdvisoryLockManager,
   type TryWithLockResult,
 } from "pg-advisory-lock"
+import {
+  createTestAdvisoryLockManager,
+  createTestAdvisoryLockState,
+} from "pg-advisory-lock/testing"
 import postgres from "postgres"
 
 import { databaseUrl } from "#test-utils"
@@ -200,6 +204,19 @@ describe("createAdvisoryLockManager return type tests", () => {
 
     // @ts-expect-error scope was replaced by namespace
     void manager.scope
+  })
+})
+
+describe("createTestAdvisoryLockManager return type tests", () => {
+  test("matches the manager contract with isolated or shared state", () => {
+    const state = createTestAdvisoryLockState()
+
+    expectTypeOf(
+      createTestAdvisoryLockManager(),
+    ).toEqualTypeOf<AdvisoryLockManager>()
+    expectTypeOf(
+      createTestAdvisoryLockManager({ state }),
+    ).toEqualTypeOf<AdvisoryLockManager>()
   })
 })
 

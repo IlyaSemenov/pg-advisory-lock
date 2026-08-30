@@ -216,6 +216,29 @@ Different names or namespace chains can theoretically collide in the 64-bit keys
 Treat derived numeric keys as an implementation detail.
 Do not persist them or use them as a cross-version interoperability contract.
 
+## Testing
+
+Use `pg-advisory-lock/testing` to test code against the manager contract without connecting to PostgreSQL:
+
+```ts
+import { createTestAdvisoryLockManager } from "pg-advisory-lock/testing"
+
+const locks = createTestAdvisoryLockManager()
+```
+
+If a test needs multiple managers connected to the same PostgreSQL lock space, create and pass shared state:
+
+```ts
+import {
+  createTestAdvisoryLockManager,
+  createTestAdvisoryLockState,
+} from "pg-advisory-lock/testing"
+
+const state = createTestAdvisoryLockState()
+const locks1 = createTestAdvisoryLockManager({ state })
+const locks2 = createTestAdvisoryLockManager({ state })
+```
+
 ## Acknowledgments
 
 Originally inspired by [advisory-lock](https://github.com/olalonde/advisory-lock).

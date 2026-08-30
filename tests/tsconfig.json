@@ -2,7 +2,8 @@
   "extends": "../tsconfig",
   "compilerOptions": {
     "paths": {
-      "pg-advisory-lock": ["../src"]
+      "pg-advisory-lock": ["../src"],
+      "pg-advisory-lock/testing": ["../src/testing.ts"]
     }
   },
   "include": ["**/*.ts"]
