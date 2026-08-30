@@ -1,5 +1,11 @@
 # pg-advisory-lock
 
+## 2.1.0
+
+### Minor Changes
+
+- 7174aeb: Add an in-memory test advisory lock manager under `pg-advisory-lock/testing`.
+
 ## 2.0.0
 
 ### Major Changes
