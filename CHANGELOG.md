@@ -1,5 +1,11 @@
 # pg-advisory-lock
 
+## 2.2.0
+
+### Minor Changes
+
+- 8d35064: Add asynchronous disposal support through `Symbol.asyncDispose`.
+
 ## 2.1.0
 
 ### Minor Changes
