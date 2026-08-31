@@ -46,7 +46,7 @@
     "provenance": true
   },
   "engines": {
-    "node": ">=14.5.0"
+    "node": ">=18.18.0"
   },
   "scripts": {
     "build": "tsdown",

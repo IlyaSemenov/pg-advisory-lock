@@ -9,7 +9,7 @@ It is useful when the protected work includes external I/O, non-transactional op
 npm install pg-advisory-lock
 ```
 
-PostgreSQL 14 or newer is required.
+Node.js 18.18 or newer and PostgreSQL 14 or newer are required.
 Use a direct connection or [PgBouncer session pooling](https://www.pgbouncer.org/features.html).
 PgBouncer transaction and statement pooling are unsupported.
 
@@ -162,6 +162,8 @@ await sql.end()
 Calling it inside an active lock callback rejects to avoid waiting for that callback itself.
 Shutdown may wait indefinitely for a blocking acquisition, an unfinished callback, or a forgotten manual lock.
 Release every successful `tryLock()` before awaiting shutdown.
+
+The root manager also implements the asynchronous disposal protocol, so integrations can use `Symbol.asyncDispose` instead of calling `close()` directly.
 
 ## Reentrant and Concurrent Calls
 

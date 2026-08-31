@@ -301,5 +301,10 @@ export function createTestAdvisoryLockManager(
     }
   }
 
-  return { close: () => lifecycle.close(), ...createKeyspace([]) }
+  const close = () => lifecycle.close()
+  return {
+    ...createKeyspace([]),
+    close,
+    [Symbol.asyncDispose]: close,
+  }
 }

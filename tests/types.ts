@@ -180,6 +180,7 @@ describe("createAdvisoryLockManager return type tests", () => {
     const result = createAdvisoryLockManager(databaseUrl)
 
     expectTypeOf(result.close).toEqualTypeOf<() => Promise<void>>()
+    expectTypeOf(result).toMatchTypeOf<AsyncDisposable>()
     expectTypeOf(result).toHaveProperty("wrapWithLock")
     expectTypeOf(result.wrapWithLock).toBeFunction()
     expectTypeOf(result.wrapWithLock).parameter(0).toBeString()

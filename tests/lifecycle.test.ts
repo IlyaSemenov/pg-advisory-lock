@@ -30,8 +30,8 @@ describe("lifecycle", () => {
 
     await locks.withLock("owned-lifecycle", async () => "success")
 
-    const closePromise = locks.close()
-    expect(locks.close()).toBe(closePromise)
+    const closePromise = locks[Symbol.asyncDispose]()
+    expect(closePromise).toBe(locks.close())
     await closePromise
 
     expect(closedConnections).toBe(1)

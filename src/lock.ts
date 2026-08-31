@@ -30,7 +30,9 @@ export interface AdvisoryLockKeyspace {
 /**
  * The root advisory lock manager, including ownership of its connection lifecycle.
  */
-export interface AdvisoryLockManager extends AdvisoryLockKeyspace {
+export interface AdvisoryLockManager
+  extends AdvisoryLockKeyspace,
+    AsyncDisposable {
   /** Stops new acquisitions, waits for active locks, and closes owned connections. */
   close(): Promise<void>
 }
@@ -74,5 +76,10 @@ export function createAdvisoryLockManager(
     }
   }
 
-  return { close: () => pool.close(), ...createKeyspace([]) }
+  const close = () => pool.close()
+  return {
+    ...createKeyspace([]),
+    close,
+    [Symbol.asyncDispose]: close,
+  }
 }

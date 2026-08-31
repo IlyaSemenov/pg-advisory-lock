@@ -176,8 +176,8 @@ describe("test advisory lock manager", () => {
     await callbackStarted.promise
 
     let closed = false
-    const closePromise = locks.close()
-    expect(locks.close()).toBe(closePromise)
+    const closePromise = locks[Symbol.asyncDispose]()
+    expect(closePromise).toBe(locks.close())
     const closing = closePromise.then(() => {
       closed = true
     })
