@@ -1,3 +1,4 @@
+export { deriveAdvisoryLockKey } from "./key"
 export {
   type AdvisoryLockKeyspace,
   type AdvisoryLockManager,

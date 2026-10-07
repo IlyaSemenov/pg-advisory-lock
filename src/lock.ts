@@ -1,5 +1,6 @@
 import postgres from "postgres"
 
+import { resolveAdvisoryLockKey } from "./key"
 import type { AdvisoryMutex, TryWithLockResult } from "./mutex"
 import { createAdvisoryMutex } from "./mutex"
 import { NestingPool } from "./pool"
@@ -10,19 +11,20 @@ type PostgresOptions = postgres.Options<Record<string, postgres.PostgresType>>
  * A configured mapping from logical lock names to PostgreSQL advisory keys.
  *
  * Namespaces share the root manager's connection lifecycle.
+ * The root manager also accepts a signed 64-bit `bigint` as a raw PostgreSQL advisory key.
  */
-export interface AdvisoryLockKeyspace {
-  createMutex(name: string): AdvisoryMutex
+export interface AdvisoryLockKeyspace<TName extends string | bigint = string> {
+  createMutex(name: TName): AdvisoryMutex
   /** Creates an isolated nested namespace within this keyspace. */
   namespace(value: string): AdvisoryLockKeyspace
-  tryLock(name: string): Promise<(() => Promise<void>) | undefined>
+  tryLock(name: TName): Promise<(() => Promise<void>) | undefined>
   tryWithLock<T>(
-    name: string,
+    name: TName,
     fn: () => PromiseLike<T>,
   ): Promise<TryWithLockResult<T>>
-  withLock<T>(name: string, fn: () => PromiseLike<T>): Promise<T>
+  withLock<T>(name: TName, fn: () => PromiseLike<T>): Promise<T>
   wrapWithLock<TArgs extends readonly unknown[], TReturn>(
-    name: string,
+    name: TName,
     fn: (...args: TArgs) => PromiseLike<TReturn>,
   ): (...args: TArgs) => Promise<TReturn>
 }
@@ -31,7 +33,7 @@ export interface AdvisoryLockKeyspace {
  * The root advisory lock manager, including ownership of its connection lifecycle.
  */
 export interface AdvisoryLockManager
-  extends AdvisoryLockKeyspace,
+  extends AdvisoryLockKeyspace<string | bigint>,
     AsyncDisposable {
   /** Stops new acquisitions, waits for active locks, and closes owned connections. */
   close(): Promise<void>
@@ -62,16 +64,18 @@ export function createAdvisoryLockManager(
     ownsPool ? () => basePool.end() : undefined,
   )
 
-  function createKeyspace(namespaces: readonly string[]): AdvisoryLockKeyspace {
-    const createMutex = (name: string) =>
-      createAdvisoryMutex(pool, name, namespaces)
+  function createKeyspace(
+    namespaces: readonly string[],
+  ): AdvisoryLockKeyspace<string | bigint> {
+    const createMutex = (name: string | bigint) =>
+      createAdvisoryMutex(pool, resolveAdvisoryLockKey(name, namespaces))
 
     return {
       createMutex,
       namespace: (value) => createKeyspace([...namespaces, value]),
-      tryLock: (name) => createMutex(name).tryLock(),
-      tryWithLock: (name, fn) => createMutex(name).tryWithLock(fn),
-      withLock: (name, fn) => createMutex(name).withLock(fn),
+      tryLock: async (name) => createMutex(name).tryLock(),
+      tryWithLock: async (name, fn) => createMutex(name).tryWithLock(fn),
+      withLock: async (name, fn) => createMutex(name).withLock(fn),
       wrapWithLock: (name, fn) => createMutex(name).wrapWithLock(fn),
     }
   }

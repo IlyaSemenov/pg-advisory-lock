@@ -183,7 +183,9 @@ describe("createAdvisoryLockManager return type tests", () => {
     expectTypeOf(result).toMatchTypeOf<AsyncDisposable>()
     expectTypeOf(result).toHaveProperty("wrapWithLock")
     expectTypeOf(result.wrapWithLock).toBeFunction()
-    expectTypeOf(result.wrapWithLock).parameter(0).toBeString()
+    expectTypeOf(result.wrapWithLock)
+      .parameter(0)
+      .toEqualTypeOf<string | bigint>()
     expectTypeOf(result.wrapWithLock).parameter(1).toBeFunction()
     expectTypeOf(result.wrapWithLock).returns.toBeFunction()
   })
@@ -199,6 +201,13 @@ describe("createAdvisoryLockManager return type tests", () => {
     expectTypeOf(mutex.tryWithLock(async () => "done")).toEqualTypeOf<
       Promise<TryWithLockResult<string>>
     >()
+
+    expectTypeOf(manager.withLock).parameter(0).toEqualTypeOf<string | bigint>()
+    expectTypeOf(namespace.withLock).parameter(0).toEqualTypeOf<string>()
+    expectTypeOf(manager).toMatchTypeOf<AdvisoryLockKeyspace>()
+
+    // @ts-expect-error raw keys are not namespaced
+    void namespace.withLock(1n, async () => {})
 
     // @ts-expect-error derived keyspaces do not own the manager lifecycle
     void namespace.close

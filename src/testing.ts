@@ -1,16 +1,10 @@
 import { AsyncLocalStorage } from "node:async_hooks"
 
+import { resolveAdvisoryLockKey } from "./key"
 import type { AdvisoryLockKeyspace, AdvisoryLockManager } from "./lock"
 import type { AdvisoryMutex, TryWithLockResult } from "./mutex"
 
 const stateBrand: unique symbol = Symbol("TestAdvisoryLockState")
-
-function serializeAdvisoryLockKey(
-  namespaces: readonly string[],
-  name: string,
-): string {
-  return JSON.stringify([...namespaces, name])
-}
 
 /** Shared in-memory PostgreSQL advisory lock space for test managers. */
 export interface TestAdvisoryLockState {
@@ -37,9 +31,9 @@ type HeldLock = {
 
 class TestAdvisoryLockStateImplementation implements TestAdvisoryLockState {
   readonly [stateBrand] = true
-  private readonly locks = new Map<string, HeldLock>()
+  private readonly locks = new Map<bigint, HeldLock>()
 
-  async acquire(key: string, owner: LockOwner): Promise<void> {
+  async acquire(key: bigint, owner: LockOwner): Promise<void> {
     const held = this.locks.get(key)
     if (!held) {
       this.locks.set(key, { count: 1, owner, waiters: [] })
@@ -55,7 +49,7 @@ class TestAdvisoryLockStateImplementation implements TestAdvisoryLockState {
     })
   }
 
-  tryAcquire(key: string, owner: LockOwner): boolean {
+  tryAcquire(key: bigint, owner: LockOwner): boolean {
     const held = this.locks.get(key)
     if (!held) {
       this.locks.set(key, { count: 1, owner, waiters: [] })
@@ -68,7 +62,7 @@ class TestAdvisoryLockStateImplementation implements TestAdvisoryLockState {
     return false
   }
 
-  release(key: string, owner: LockOwner): void {
+  release(key: bigint, owner: LockOwner): void {
     const held = this.locks.get(key)
     if (!held || held.owner !== owner) {
       throw new Error("Advisory lock is no longer held by its connection")
@@ -200,16 +194,11 @@ class TestManagerLifecycle {
 }
 
 class TestAdvisoryMutex implements AdvisoryMutex {
-  private readonly key: string
-
   constructor(
     private readonly state: TestAdvisoryLockStateImplementation,
     private readonly lifecycle: TestManagerLifecycle,
-    namespaces: readonly string[],
-    name: string,
-  ) {
-    this.key = serializeAdvisoryLockKey(namespaces, name)
-  }
+    private readonly key: bigint,
+  ) {}
 
   async withLock<T>(fn: () => PromiseLike<T>): Promise<T> {
     return await this.lifecycle.withOwner(async (owner) => {
@@ -287,16 +276,22 @@ export function createTestAdvisoryLockManager(
 
   const lifecycle = new TestManagerLifecycle()
 
-  function createKeyspace(namespaces: readonly string[]): AdvisoryLockKeyspace {
-    const createMutex = (name: string) =>
-      new TestAdvisoryMutex(stateImplementation, lifecycle, namespaces, name)
+  function createKeyspace(
+    namespaces: readonly string[],
+  ): AdvisoryLockKeyspace<string | bigint> {
+    const createMutex = (name: string | bigint) =>
+      new TestAdvisoryMutex(
+        stateImplementation,
+        lifecycle,
+        resolveAdvisoryLockKey(name, namespaces),
+      )
 
     return {
       createMutex,
       namespace: (value) => createKeyspace([...namespaces, value]),
-      tryLock: (name) => createMutex(name).tryLock(),
-      tryWithLock: (name, fn) => createMutex(name).tryWithLock(fn),
-      withLock: (name, fn) => createMutex(name).withLock(fn),
+      tryLock: async (name) => createMutex(name).tryLock(),
+      tryWithLock: async (name, fn) => createMutex(name).tryWithLock(fn),
+      withLock: async (name, fn) => createMutex(name).withLock(fn),
       wrapWithLock: (name, fn) => createMutex(name).wrapWithLock(fn),
     }
   }

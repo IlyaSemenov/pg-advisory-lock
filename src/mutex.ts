@@ -10,7 +10,7 @@ export type TryWithLockResult<T> =
   | { acquired: true; result: T }
 
 /**
- * A reusable mutex bound to one logical advisory lock name and its namespaces.
+ * A reusable mutex bound to one PostgreSQL advisory lock key.
  */
 export interface AdvisoryMutex {
   tryLock(): Promise<(() => Promise<void>) | undefined>
@@ -22,37 +22,16 @@ export interface AdvisoryMutex {
 }
 
 class PostgresAdvisoryMutex implements AdvisoryMutex {
-  private readonly name: string
-  private readonly namespaces: readonly string[]
-  private readonly pool: NestingPool
-
   constructor(
-    pool: NestingPool,
-    name: string,
-    namespaces: readonly string[] = [],
-  ) {
-    this.name = name
-    this.namespaces = namespaces
-    this.pool = pool
-  }
+    private readonly pool: NestingPool,
+    private readonly key: bigint,
+  ) {}
 
-  private lockKey(client: ReservedSql) {
-    const zero = client`0`
-    const hash = (value: string, seed: typeof zero) =>
-      client`hashtextextended(${value}::text COLLATE "C", ${seed})`
-
-    let seed = zero
-    for (const namespace of this.namespaces) {
-      seed = hash(namespace, seed)
-    }
-
-    return hash(this.name, seed)
-  }
-
+  // postgres.js typings accept bigint parameters only with a custom bigint type.
   private async lock(client: ReservedSql): Promise<void> {
     await client`
       SELECT
-      FROM (SELECT pg_advisory_lock(${this.lockKey(client)})) AS control
+      FROM (SELECT pg_advisory_lock(${String(this.key)}::int8)) AS control
       OFFSET 1
     `
   }
@@ -61,7 +40,7 @@ class PostgresAdvisoryMutex implements AdvisoryMutex {
     const result = await client`
       SELECT
       FROM (
-        SELECT pg_try_advisory_lock(${this.lockKey(client)}) AS succeeded
+        SELECT pg_try_advisory_lock(${String(this.key)}::int8) AS succeeded
       ) AS control
       -- Keep success rowless: postgres.js row transforms can throw after acquisition.
       WHERE NOT succeeded
@@ -73,7 +52,7 @@ class PostgresAdvisoryMutex implements AdvisoryMutex {
     const result = await client`
       SELECT
       FROM (
-        SELECT pg_advisory_unlock(${this.lockKey(client)}) AS succeeded
+        SELECT pg_advisory_unlock(${String(this.key)}::int8) AS succeeded
       ) AS control
       -- Keep success rowless: postgres.js row transforms can throw after release.
       WHERE NOT succeeded
@@ -169,11 +148,10 @@ class PostgresAdvisoryMutex implements AdvisoryMutex {
   }
 }
 
-/** Creates a mutex bound to a logical name and namespace chain. */
+/** Creates a mutex bound to a PostgreSQL advisory lock key. */
 export function createAdvisoryMutex(
   pool: NestingPool,
-  name: string,
-  namespaces: readonly string[] = [],
+  key: bigint,
 ): AdvisoryMutex {
-  return new PostgresAdvisoryMutex(pool, name, namespaces)
+  return new PostgresAdvisoryMutex(pool, key)
 }

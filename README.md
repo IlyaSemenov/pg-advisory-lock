@@ -71,6 +71,18 @@ const rebuildExclusively = locks.wrapWithLock(
 
 An `AdvisoryMutex` provides `withLock()`, `tryWithLock()`, `tryLock()`, and `wrapWithLock()`.
 
+### Raw Keys
+
+The root manager also accepts a signed 64-bit `bigint` instead of a name and uses it as the PostgreSQL advisory key directly:
+
+```ts
+await locks.withLock(42n, async () => {
+  await runExclusiveJob()
+})
+```
+
+Values outside the signed 64-bit range are rejected with a `RangeError`.
+
 ### Manage a Lock Across Hooks
 
 Most code should use `withLock()` or `tryWithLock()` so release is automatic.
@@ -111,6 +123,8 @@ await withLock("db:migrate", async () => {
 
 `locks.namespace("tenant-a")` and `locks.namespace("tenant-b")` create derived keyspaces.
 The same name within one keyspace resolves to the same advisory key, while different namespaces normally resolve it to different keys.
+
+Namespaces accept only string names, because a raw key cannot be namespaced.
 
 Namespaces can be nested, and their order is significant:
 
@@ -199,24 +213,46 @@ They remain held for the callback or until a manual lock is released.
 
 When all protected work fits inside one transaction, PostgreSQL's `pg_advisory_xact_lock` may be simpler because it releases automatically at commit or rollback.
 Transaction-level locks and this manager have different lifecycles and are not interchangeable.
-The package does not promise common key derivation or automatic coordination between them.
+
+PostgreSQL makes session-level and transaction-level locks on the same key conflict across sessions.
+Use [`deriveAdvisoryLockKey()`](#lock-key-derivation) to take a transaction-level lock that coordinates with a named lock of this manager:
+
+```ts
+const key = deriveAdvisoryLockKey("db:migrate")
+
+await sql.begin(async (sql) => {
+  await sql`SELECT pg_advisory_xact_lock(${String(key)}::int8)`
+  await migrate(sql)
+})
+```
 
 ## Lock Key Derivation
 
-The root keyspace converts each name to a signed 64-bit key with `hashtextextended(name::text COLLATE "C", 0)`.
-Namespaces recursively derive the seed used to hash the name.
-Given `H(value, seed) = hashtextextended(value COLLATE "C", seed)`:
+A name in the root keyspace maps to the first 8 bytes of its UTF-8 SHA-256 digest, read as a signed big-endian 64-bit integer:
 
 ```ts
-locks.namespace("tenant-a").namespace("jobs")
+import { createHash } from "node:crypto"
+
+const key = createHash("sha256").update(name).digest().readBigInt64BE()
 ```
 
-uses `H(name, H("jobs", H("tenant-a", 0)))`.
+Namespaces derive a seed that is prepended to the hashed name.
+Given `S₀` as an empty byte string and `Sₙ = SHA-256(Sₙ₋₁ ‖ namespaceₙ)`, a name in `n` nested namespaces maps to the first 8 bytes of `SHA-256(Sₙ ‖ name)`.
 
-The `C` collation makes derivation independent of the database's default collation, and names remain case-sensitive.
-Different names or namespace chains can theoretically collide in the 64-bit keyspace.
-Treat derived numeric keys as an implementation detail.
-Do not persist them or use them as a cross-version interoperability contract.
+This derivation is a stable contract, so keys can be computed outside this package.
+`deriveAdvisoryLockKey()` implements it:
+
+```ts
+import { deriveAdvisoryLockKey } from "pg-advisory-lock"
+
+deriveAdvisoryLockKey("db:migrate")
+deriveAdvisoryLockKey("db:migrate", ["tenant-a", "jobs"])
+```
+
+The second call returns the key used by `locks.namespace("tenant-a").namespace("jobs")`.
+
+Names are case-sensitive.
+Different names, namespace chains, or raw keys can theoretically collide in the 64-bit keyspace.
 
 ## Testing
 

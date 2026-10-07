@@ -24,6 +24,7 @@ Do not catalog files or restate information evident from their names and locatio
 - Keep successful lock and unlock control queries rowless; postgres.js row transforms run after PostgreSQL changes session lock state.
 - Keep PostgreSQL tests non-concurrent because they share a database and lock names.
 - Treat `AdvisoryLockKeyspace` as a configured mapping from logical lock names to PostgreSQL advisory keys.
+- Treat the key derivation documented in README as a stable public contract; changing it is a breaking change.
 - Keep connection ownership and `close()` on the root `AdvisoryLockManager`; derived keyspaces share its pool and lifecycle.
 
 ## Naming

@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "bun:test"
 
+import { deriveAdvisoryLockKey } from "./key"
 import type { AdvisoryLockManager } from "./lock"
 import {
   createTestAdvisoryLockManager,
@@ -203,5 +204,19 @@ describe("test advisory lock manager", () => {
 
     expect(await locks.withLock("after", async () => "open")).toBe("open")
     await locks.close()
+  })
+
+  it("coordinates a name and its derived raw key", async () => {
+    const state = createTestAdvisoryLockState()
+    const holderLocks = createTestAdvisoryLockManager({ state })
+    const contenderLocks = createTestAdvisoryLockManager({ state })
+    await holderLocks.withLock("job", async () => {
+      expect(
+        await contenderLocks.tryWithLock(
+          deriveAdvisoryLockKey("job"),
+          async () => "unexpected",
+        ),
+      ).toEqual({ acquired: false })
+    })
   })
 })
