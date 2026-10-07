@@ -1,5 +1,12 @@
 # pg-advisory-lock
 
+## 3.0.0
+
+### Major Changes
+
+- 73dad5d: Derive advisory lock keys in Node.js from SHA-256 of the lock name and namespace chain, expose the derivation as `deriveAdvisoryLockKey()`, and accept a signed 64-bit `bigint` as a raw key in root manager lock operations.
+  Keys differ from 2.x, so 2.x and 3.x instances do not coordinate on the same lock names.
+
 ## 2.2.0
 
 ### Minor Changes
