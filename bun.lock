@@ -4,18 +4,19 @@
   "workspaces": {
     "": {
       "name": "pg-advisory-lock",
-      "dependencies": {
-        "postgres": "^3.4.9",
-      },
       "devDependencies": {
         "@arethetypeswrong/core": "^0.18.5",
         "@biomejs/biome": "^2.6.4",
         "@changesets/cli": "^3.0.3",
         "@tsconfig/bun": "^1.0.11",
         "@types/bun": "^1.4.4",
+        "postgres": "^4.0.0",
         "publint": "^0.3.25",
         "tsdown": "^0.23.4",
         "typescript": "^7.0.2",
+      },
+      "peerDependencies": {
+        "postgres": "^3.4.0 || ^4.0.0",
       },
     },
   },
@@ -252,7 +253,7 @@
 
     "picomatch": ["picomatch@4.0.7", "", {}, "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=="],
 
-    "postgres": ["postgres@3.4.9", "", {}, "sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw=="],
+    "postgres": ["postgres@4.0.0", "", {}, "sha512-kBh8qXtcvvIAc00DftQyOxz7M/3Zxww1tRMXZPLzipNXXl5PIzHml+9zB3Mrge2U8ldc0WF1ZdLp1iYQi7Kh3A=="],
 
     "publint": ["publint@0.3.25", "", { "dependencies": { "@publint/pack": "^0.1.7", "package-manager-detector": "^1.8.0", "picocolors": "^1.1.1", "sade": "^1.8.1" }, "bin": { "publint": "./src/cli.js" } }, "sha512-WMMbn/d7JqRlfXQL/JUI4n5skC8cJ5WVr8/wT5mmiYWkUdENkZr1I5rgs2+dQPVRgoJd+JRYtB46MTsuDylw9g=="],
 

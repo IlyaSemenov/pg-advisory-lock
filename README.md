@@ -6,7 +6,7 @@ It is useful when the protected work includes external I/O, non-transactional op
 ## Install
 
 ```sh
-npm install pg-advisory-lock
+npm install pg-advisory-lock postgres
 ```
 
 Node.js 18.18 or newer and PostgreSQL 14 or newer are required.

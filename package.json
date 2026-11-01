@@ -56,8 +56,8 @@
     "prepublishOnly": "bun run build",
     "lint": "biome check --write ."
   },
-  "dependencies": {
-    "postgres": "^3.4.9"
+  "peerDependencies": {
+    "postgres": "^3.4.0 || ^4.0.0"
   },
   "devDependencies": {
     "@arethetypeswrong/core": "^0.18.5",
@@ -65,6 +65,7 @@
     "@changesets/cli": "^3.0.3",
     "@tsconfig/bun": "^1.0.11",
     "@types/bun": "^1.4.4",
+    "postgres": "^4.0.0",
     "publint": "^0.3.25",
     "tsdown": "^0.23.4",
     "typescript": "^7.0.2"

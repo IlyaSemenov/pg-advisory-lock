@@ -71,24 +71,58 @@ jobs:
         with:
           node-version: 18.18.0
 
-      - name: Smoke test package on minimum Node
+      - name: Smoke test package on minimum Node with postgres.js 3
         run: |
-          mkdir -p "$RUNNER_TEMP/package-smoke"
-          cd "$RUNNER_TEMP/package-smoke"
+          mkdir -p "$RUNNER_TEMP/package-smoke-postgres3"
+          cd "$RUNNER_TEMP/package-smoke-postgres3"
           npm init --yes
-          npm install --ignore-scripts "$PACKAGE_TARBALL"
-          node -e 'require("pg-advisory-lock")'
-          node --unhandled-rejections=strict --input-type=module -e 'import("pg-advisory-lock")'
+          npm install --ignore-scripts "$PACKAGE_TARBALL" postgres@3
+          node -e 'require("pg-advisory-lock").createAdvisoryLockManager("postgres://localhost").close()'
+          node --unhandled-rejections=strict --input-type=module -e 'const { createAdvisoryLockManager } = await import("pg-advisory-lock"); await createAdvisoryLockManager("postgres://localhost").close()'
+
+      # postgres.js 4 is ESM-only, and require() loads ESM starting with Node.js 20.19.
+      - name: Setup minimum Node for postgres.js 4
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20.19.0
+
+      - name: Smoke test package on minimum Node with postgres.js 4
+        run: |
+          mkdir -p "$RUNNER_TEMP/package-smoke-postgres4"
+          cd "$RUNNER_TEMP/package-smoke-postgres4"
+          npm init --yes
+          npm install --ignore-scripts "$PACKAGE_TARBALL" postgres@4
+          node -e 'require("pg-advisory-lock").createAdvisoryLockManager("postgres://localhost").close()'
+          node --unhandled-rejections=strict --input-type=module -e 'const { createAdvisoryLockManager } = await import("pg-advisory-lock"); await createAdvisoryLockManager("postgres://localhost").close()'
 
       - name: Restore release Node
         uses: actions/setup-node@v7
         with:
           node-version: 24
 
+      - name: Typecheck package declarations
+        run: |
+          for SMOKE_DIR in "$RUNNER_TEMP/package-smoke-postgres3" "$RUNNER_TEMP/package-smoke-postgres4"; do
+            cp tests/declarations/* "$SMOKE_DIR"
+            npm install --prefix "$SMOKE_DIR" --ignore-scripts @types/node
+            node_modules/.bin/tsc -p "$SMOKE_DIR"
+          done
+
       - name: Test package
         run: bun run test
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost
+
+      - name: Test package with minimum postgres.js 3
+        run: |
+          bun add --dev --no-save postgres@3.4.0
+          bun run types
+          bun run test
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost
+
+      - name: Restore locked dependencies
+        run: bun install --frozen-lockfile
 
       - name: Capture release version
         if: ${{ github.ref == env.MAIN_REF }}

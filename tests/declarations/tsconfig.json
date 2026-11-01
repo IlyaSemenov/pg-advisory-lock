@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "module": "node16",
+    "noEmit": true,
+    "skipLibCheck": false,
+    "strict": true,
+    "types": ["node"]
+  },
+  "files": ["consumer.type-test.cts", "consumer.type-test.mts"]
+}
