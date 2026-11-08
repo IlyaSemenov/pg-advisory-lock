@@ -1,17 +1,31 @@
 {
   "name": "pg-advisory-lock",
-  "type": "module",
   "version": "4.0.0",
-  "packageManager": "bun@1.4.4",
   "description": "Coordinate exclusive work across application instances with PostgreSQL session-level advisory locks.",
-  "author": "Ilya Semenov",
+  "homepage": "https://github.com/IlyaSemenov/pg-advisory-lock#readme",
+  "bugs": "https://github.com/IlyaSemenov/pg-advisory-lock/issues",
   "license": "MIT",
+  "author": "Ilya Semenov",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/IlyaSemenov/pg-advisory-lock.git"
   },
-  "homepage": "https://github.com/IlyaSemenov/pg-advisory-lock#readme",
-  "bugs": "https://github.com/IlyaSemenov/pg-advisory-lock/issues",
+  "files": [
+    "README.md",
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
+  "typesVersions": {
+    "*": {
+      "testing": [
+        "./dist/testing.d.cts"
+      ]
+    }
+  },
   "imports": {
     "#test-utils": "./test-utils/index.ts"
   },
@@ -26,27 +40,9 @@
     },
     "./package.json": "./package.json"
   },
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.cts",
-  "sideEffects": false,
-  "typesVersions": {
-    "*": {
-      "testing": [
-        "./dist/testing.d.cts"
-      ]
-    }
-  },
-  "files": [
-    "README.md",
-    "dist"
-  ],
   "publishConfig": {
     "access": "public",
     "provenance": true
-  },
-  "engines": {
-    "node": ">=18.18.0"
   },
   "scripts": {
     "build": "tsdown",
@@ -54,20 +50,27 @@
     "types": "bun check && bun check -p tests",
     "test": "bun test",
     "prepublishOnly": "bun run build",
-    "lint": "biome check --write ."
-  },
-  "peerDependencies": {
-    "postgres": "^3.4.0 || ^4.0.0"
+    "lint": "oxlint --fix && oxfmt",
+    "lint:check": "oxlint && oxfmt --check"
   },
   "devDependencies": {
     "@arethetypeswrong/core": "^0.18.5",
-    "@biomejs/biome": "^2.6.4",
     "@changesets/cli": "^3.0.3",
+    "@ilyasemenov/oxc-config": "^0.1.2",
     "@tsconfig/bun": "^1.0.11",
     "@types/bun": "^1.4.4",
+    "oxfmt": "^0.77.0",
+    "oxlint": "^1.92.0",
     "postgres": "^4.0.0",
     "publint": "^0.3.25",
     "tsdown": "^0.23.4",
     "typescript": "^7.0.2"
-  }
+  },
+  "peerDependencies": {
+    "postgres": "^3.4.0 || ^4.0.0"
+  },
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "packageManager": "bun@1.4.4"
 }
