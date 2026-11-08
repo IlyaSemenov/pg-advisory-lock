@@ -51,12 +51,10 @@ describe("lifecycle", () => {
       await locks.close()
 
       await expect(locks.tryLock("closed-lock")).rejects.toThrow(closedError)
-      await expect(mutex.withLock(async () => "unexpected")).rejects.toThrow(
+      await expect(mutex.withLock(async () => "unexpected")).rejects.toThrow(closedError)
+      await expect(namespace.withLock("closed-lock", async () => "unexpected")).rejects.toThrow(
         closedError,
       )
-      await expect(
-        namespace.withLock("closed-lock", async () => "unexpected"),
-      ).rejects.toThrow(closedError)
       await expect(wrapped()).rejects.toThrow(closedError)
 
       const result = await sql`SELECT 1 AS value`
@@ -146,10 +144,7 @@ describe("lifecycle", () => {
         )
       })
 
-      const result = await locks.withLock(
-        "still-open-after-rejected-close",
-        async () => "success",
-      )
+      const result = await locks.withLock("still-open-after-rejected-close", async () => "success")
       expect(result).toBe("success")
       await locks.close()
     } finally {
@@ -161,9 +156,7 @@ describe("lifecycle", () => {
     const sql = postgres(databaseUrl)
     const locks = createAdvisoryLockManager(sql)
     const resumeChild = Promise.withResolvers<void>()
-    let child!: Promise<
-      { error: unknown; status: "rejected" } | { status: "resolved" }
-    >
+    let child!: Promise<{ error: unknown; status: "rejected" } | { status: "resolved" }>
 
     try {
       await locks.withLock("self-close-active-parent", async () => {
@@ -180,7 +173,7 @@ describe("lifecycle", () => {
         resumeChild.resolve()
         const outcome = await Promise.race([
           child,
-          new Promise<{ status: "pending" }>((resolve) => {
+          new Promise<{ status: "pending" }>(resolve => {
             setTimeout(() => resolve({ status: "pending" }), 50)
           }),
         ])
@@ -188,9 +181,7 @@ describe("lifecycle", () => {
         expect(outcome.status).toBe("rejected")
         if (outcome.status === "rejected") {
           expect(outcome.error).toEqual(
-            new Error(
-              "Cannot close advisory lock manager from an active lock context",
-            ),
+            new Error("Cannot close advisory lock manager from an active lock context"),
           )
         }
       })

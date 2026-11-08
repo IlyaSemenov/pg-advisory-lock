@@ -11,10 +11,7 @@ import { createHash } from "node:crypto"
  * @param namespaces - The namespace chain in `namespace()` call order.
  * @returns The signed 64-bit key passed to PostgreSQL advisory lock functions.
  */
-export function deriveAdvisoryLockKey(
-  name: string,
-  namespaces: readonly string[] = [],
-): bigint {
+export function deriveAdvisoryLockKey(name: string, namespaces: readonly string[] = []): bigint {
   let seed: Uint8Array = new Uint8Array(0)
   for (const namespace of namespaces) seed = sha256(seed, namespace)
   return sha256(seed, name).readBigInt64BE()

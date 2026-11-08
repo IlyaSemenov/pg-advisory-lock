@@ -8,7 +8,5 @@ export const locksFromOptions = createAdvisoryLockManager({
   host: "localhost",
   max: 2,
 })
-export const locksFromSql = createAdvisoryLockManager(
-  postgres("postgres://localhost"),
-)
+export const locksFromSql = createAdvisoryLockManager(postgres("postgres://localhost"))
 export const testLocks = createTestAdvisoryLockManager()

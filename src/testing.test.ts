@@ -2,16 +2,11 @@ import { describe, expect, expectTypeOf, it } from "bun:test"
 
 import { deriveAdvisoryLockKey } from "./key"
 import type { AdvisoryLockManager } from "./lock"
-import {
-  createTestAdvisoryLockManager,
-  createTestAdvisoryLockState,
-} from "./testing"
+import { createTestAdvisoryLockManager, createTestAdvisoryLockState } from "./testing"
 
 describe("test advisory lock manager", () => {
   it("is typed as an AdvisoryLockManager", () => {
-    expectTypeOf(
-      createTestAdvisoryLockManager(),
-    ).toEqualTypeOf<AdvisoryLockManager>()
+    expectTypeOf(createTestAdvisoryLockManager()).toEqualTypeOf<AdvisoryLockManager>()
   })
 
   it("runs callbacks for one key sequentially", async () => {
@@ -120,9 +115,7 @@ describe("test advisory lock manager", () => {
     const locks2 = createTestAdvisoryLockManager({ state })
 
     await locks1.withLock("job", async () => {
-      expect(await locks2.tryWithLock("job", async () => "unexpected")).toEqual(
-        { acquired: false },
-      )
+      expect(await locks2.tryWithLock("job", async () => "unexpected")).toEqual({ acquired: false })
     })
   })
 
@@ -133,9 +126,10 @@ describe("test advisory lock manager", () => {
     const locks2 = createTestAdvisoryLockManager()
 
     await locks1.withLock("job", async () => {
-      expect(
-        await locks2.tryWithLock("job", async () => "independent"),
-      ).toEqual({ acquired: true, result: "independent" })
+      expect(await locks2.tryWithLock("job", async () => "independent")).toEqual({
+        acquired: true,
+        result: "independent",
+      })
     })
   })
 
@@ -147,9 +141,9 @@ describe("test advisory lock manager", () => {
     const keyspace2 = locks2.namespace("tenant").namespace("jobs")
 
     await keyspace1.createMutex("refresh").withLock(async () => {
-      expect(
-        await keyspace2.tryWithLock("refresh", async () => "unexpected"),
-      ).toEqual({ acquired: false })
+      expect(await keyspace2.tryWithLock("refresh", async () => "unexpected")).toEqual({
+        acquired: false,
+      })
       expect(
         await locks2
           .namespace("jobs")
@@ -184,9 +178,9 @@ describe("test advisory lock manager", () => {
     })
     await Promise.resolve()
     expect(closed).toBe(false)
-    await expect(
-      locks.withLock("new", async () => "unexpected"),
-    ).rejects.toThrow("Advisory lock manager is closing or closed")
+    await expect(locks.withLock("new", async () => "unexpected")).rejects.toThrow(
+      "Advisory lock manager is closing or closed",
+    )
 
     continueCallback.resolve()
     await Promise.all([operation, closing])
@@ -212,10 +206,7 @@ describe("test advisory lock manager", () => {
     const contenderLocks = createTestAdvisoryLockManager({ state })
     await holderLocks.withLock("job", async () => {
       expect(
-        await contenderLocks.tryWithLock(
-          deriveAdvisoryLockKey("job"),
-          async () => "unexpected",
-        ),
+        await contenderLocks.tryWithLock(deriveAdvisoryLockKey("job"), async () => "unexpected"),
       ).toEqual({ acquired: false })
     })
   })

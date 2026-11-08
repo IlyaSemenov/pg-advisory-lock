@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import {
-  type AdvisoryLockManager,
-  createAdvisoryLockManager,
-} from "pg-advisory-lock"
+import { type AdvisoryLockManager, createAdvisoryLockManager } from "pg-advisory-lock"
 import postgres from "postgres"
 
 import { databaseUrl } from "#test-utils"
@@ -23,10 +20,7 @@ function optionsWithTransform(transform: Transform) {
   }
 }
 
-async function expectManualLockLifecycle(
-  locks: AdvisoryLockManager,
-  name: string,
-) {
+async function expectManualLockLifecycle(locks: AdvisoryLockManager, name: string) {
   const unlock = await locks.tryLock(name)
   expect(unlock).toBeFunction()
   await unlock?.()
@@ -42,7 +36,7 @@ describe("postgres.js transforms", () => {
       max: 1,
       transform: {
         row: {
-          from: (row) => {
+          from: row => {
             if (Object.keys(row).length === 0) {
               transformedEmptyRows += 1
               throw new Error("Unexpected empty result row")
@@ -57,10 +51,7 @@ describe("postgres.js transforms", () => {
     const observerLocks = createAdvisoryLockManager(observerSql)
 
     try {
-      const result = await locks.tryWithLock(
-        "throwing-row-transform",
-        async () => "success",
-      )
+      const result = await locks.tryWithLock("throwing-row-transform", async () => "success")
       expect(result).toEqual({ acquired: true, result: "success" })
 
       const unlock = await locks.tryLock("throwing-row-transform-manual")
@@ -75,10 +66,7 @@ describe("postgres.js transforms", () => {
 
       expect(transformedEmptyRows).toBe(0)
       expect(
-        await observerLocks.tryWithLock(
-          "throwing-row-transform-error",
-          async () => "reacquired",
-        ),
+        await observerLocks.tryWithLock("throwing-row-transform-error", async () => "reacquired"),
       ).toEqual({ acquired: true, result: "reacquired" })
     } finally {
       await Promise.all([transformedSql.end(), observerSql.end()])
@@ -89,30 +77,22 @@ describe("postgres.js transforms", () => {
     const locks = createAdvisoryLockManager(
       optionsWithTransform({
         column: {
-          from: (name) =>
-            name === "acquired" || name === "unlocked" ? `db_${name}` : name,
+          from: name => (name === "acquired" || name === "unlocked" ? `db_${name}` : name),
         },
         row: {
-          from: (row) => ({ ...row, transformed: true }),
+          from: row => ({ ...row, transformed: true }),
         },
         value: {
           from: (value, column) =>
-            column.name === "db_acquired" || column.name === "db_unlocked"
-              ? String(value)
-              : value,
+            column.name === "db_acquired" || column.name === "db_unlocked" ? String(value) : value,
         },
       }),
     )
 
     try {
-      const result = await locks.tryWithLock(
-        "transformed-options",
-        async () => "success",
-      )
+      const result = await locks.tryWithLock("transformed-options", async () => "success")
       expect(result).toEqual({ acquired: true, result: "success" })
-      expect(
-        await locks.withLock("transformed-with-lock", async () => 42),
-      ).toBe(42)
+      expect(await locks.withLock("transformed-with-lock", async () => 42)).toBe(42)
       await expectManualLockLifecycle(locks, "transformed-manual-lock")
     } finally {
       await locks.close()
@@ -125,11 +105,10 @@ describe("postgres.js transforms", () => {
       max: 1,
       transform: {
         row: {
-          from: (row) => ({ ...row, transformed: true }),
+          from: row => ({ ...row, transformed: true }),
         },
         value: {
-          from: (value, column) =>
-            column.name === "acquired" ? (value ? "yes" : "no") : value,
+          from: (value, column) => (column.name === "acquired" ? (value ? "yes" : "no") : value),
         },
       },
     })
@@ -160,10 +139,10 @@ describe("postgres.js transforms", () => {
       max: 1,
       transform: {
         column: {
-          from: (name) => (name === "unlocked" ? "db_unlocked" : name),
+          from: name => (name === "unlocked" ? "db_unlocked" : name),
         },
         row: {
-          from: (row) => ("db_unlocked" in row ? { transformed: row } : row),
+          from: row => ("db_unlocked" in row ? { transformed: row } : row),
         },
       },
     })

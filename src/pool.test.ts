@@ -47,7 +47,7 @@ describe("test NestingPool", () => {
     })
 
     it("should reuse existing client from AsyncLocalStorage when called within withClient", async () => {
-      const result = await nestingPool.withClient(async (outerClient) => {
+      const result = await nestingPool.withClient(async outerClient => {
         // Call getClient within the AsyncLocalStorage context
         const nestedResult = await nestingPool.getClient()
 
@@ -76,7 +76,7 @@ describe("test NestingPool", () => {
 
   describe("withClient", () => {
     it("should execute function with client and release it", async () => {
-      const result = await nestingPool.withClient(async (client) => {
+      const result = await nestingPool.withClient(async client => {
         const queryResult = await client`SELECT 4 AS test`
         return queryResult[0]?.test
       })
@@ -96,7 +96,7 @@ describe("test NestingPool", () => {
       expect(activeConnections).toBe(0)
 
       // Should be able to use the pool again
-      const result = await nestingPool.withClient(async (client) => {
+      const result = await nestingPool.withClient(async client => {
         const queryResult = await client`SELECT 5 AS test`
         return queryResult[0]?.test
       })
@@ -105,15 +105,13 @@ describe("test NestingPool", () => {
     })
 
     it("should support nested calls by reusing the same client", async () => {
-      const result = await nestingPool.withClient(async (outerClient) => {
+      const result = await nestingPool.withClient(async outerClient => {
         // Nested call
-        const nestedResult = await nestingPool.withClient(
-          async (nestedClient) => {
-            expect(nestedClient).toBe(outerClient) // Should be the same client
-            const queryResult = await nestedClient`SELECT 6 AS test`
-            return queryResult[0]?.test
-          },
-        )
+        const nestedResult = await nestingPool.withClient(async nestedClient => {
+          expect(nestedClient).toBe(outerClient) // Should be the same client
+          const queryResult = await nestedClient`SELECT 6 AS test`
+          return queryResult[0]?.test
+        })
 
         expect(nestedResult).toBe(6)
 
@@ -126,13 +124,9 @@ describe("test NestingPool", () => {
     })
 
     it("should reuse the client across sequential nested calls", async () => {
-      const clients = await nestingPool.withClient(async (outerClient) => {
-        const firstClient = await nestingPool.withClient(
-          async (client) => client,
-        )
-        const secondClient = await nestingPool.withClient(
-          async (client) => client,
-        )
+      const clients = await nestingPool.withClient(async outerClient => {
+        const firstClient = await nestingPool.withClient(async client => client)
+        const secondClient = await nestingPool.withClient(async client => client)
 
         expect(activeConnections).toBe(1)
         return { outerClient, firstClient, secondClient }
@@ -144,17 +138,17 @@ describe("test NestingPool", () => {
     })
 
     it("should reuse the client across concurrent nested calls", async () => {
-      const clients = await nestingPool.withClient(async (outerClient) => {
+      const clients = await nestingPool.withClient(async outerClient => {
         const firstStarted = Promise.withResolvers<void>()
         const secondStarted = Promise.withResolvers<void>()
         const finishNested = Promise.withResolvers<void>()
 
-        const firstOperation = nestingPool.withClient(async (client) => {
+        const firstOperation = nestingPool.withClient(async client => {
           firstStarted.resolve()
           await finishNested.promise
           return client
         })
-        const secondOperation = nestingPool.withClient(async (client) => {
+        const secondOperation = nestingPool.withClient(async client => {
           secondStarted.resolve()
           await finishNested.promise
           return client
@@ -164,10 +158,7 @@ describe("test NestingPool", () => {
         const activeWhileNested = activeConnections
         finishNested.resolve()
 
-        const [firstClient, secondClient] = await Promise.all([
-          firstOperation,
-          secondOperation,
-        ])
+        const [firstClient, secondClient] = await Promise.all([firstOperation, secondOperation])
         return {
           outerClient,
           firstClient,
@@ -185,24 +176,20 @@ describe("test NestingPool", () => {
     })
 
     it("should handle multiple nested levels correctly", async () => {
-      const result = await nestingPool.withClient(async (level1Client) => {
-        const level2Result = await nestingPool.withClient(
-          async (level2Client) => {
-            expect(level2Client).toBe(level1Client)
+      const result = await nestingPool.withClient(async level1Client => {
+        const level2Result = await nestingPool.withClient(async level2Client => {
+          expect(level2Client).toBe(level1Client)
 
-            const level3Result = await nestingPool.withClient(
-              async (level3Client) => {
-                expect(level3Client).toBe(level1Client)
-                const queryResult = await level3Client`SELECT 8 AS test`
-                return queryResult[0]?.test
-              },
-            )
-
-            expect(level3Result).toBe(8)
-            const queryResult = await level2Client`SELECT 9 AS test`
+          const level3Result = await nestingPool.withClient(async level3Client => {
+            expect(level3Client).toBe(level1Client)
+            const queryResult = await level3Client`SELECT 8 AS test`
             return queryResult[0]?.test
-          },
-        )
+          })
+
+          expect(level3Result).toBe(8)
+          const queryResult = await level2Client`SELECT 9 AS test`
+          return queryResult[0]?.test
+        })
 
         expect(level2Result).toBe(9)
         const queryResult = await level1Client`SELECT 10 AS test`
@@ -252,13 +239,11 @@ describe("test NestingPool", () => {
       const resumeChild = Promise.withResolvers<void>()
       let childOperation!: Promise<boolean>
 
-      await nestingPool.withClient(async (outerClient) => {
+      await nestingPool.withClient(async outerClient => {
         await nestingPool.withClient(async () => {
           childOperation = (async () => {
             await resumeChild.promise
-            return nestingPool.withClient(
-              async (childClient) => childClient === outerClient,
-            )
+            return nestingPool.withClient(async childClient => childClient === outerClient)
           })()
         })
 

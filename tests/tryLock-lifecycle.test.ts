@@ -21,7 +21,7 @@ describe("tryLock lifecycle", () => {
   })
 
   afterEach(async () => {
-    await Promise.allSettled(unlocks.map((unlock) => unlock()))
+    await Promise.allSettled(unlocks.map(unlock => unlock()))
     await Promise.all([contenderPool.end(), holderPool.end()])
   })
 
@@ -60,10 +60,7 @@ describe("tryLock lifecycle", () => {
 
     await Promise.all([unlock(), unlock(), unlock()])
 
-    const acquired = await contenderLocks.tryWithLock(
-      "idempotent-unlock",
-      async () => "success",
-    )
+    const acquired = await contenderLocks.tryWithLock("idempotent-unlock", async () => "success")
     expect(acquired).toEqual({ acquired: true, result: "success" })
     const releasedConnection = await holderLocks.tryWithLock(
       "available-after-idempotent-unlock",
@@ -79,18 +76,12 @@ describe("tryLock lifecycle", () => {
       unlock = await acquireLock(holderLocks.tryLock("nested-manual-lock"))
     })
 
-    const blocked = await contenderLocks.tryWithLock(
-      "nested-manual-lock",
-      async () => "unexpected",
-    )
+    const blocked = await contenderLocks.tryWithLock("nested-manual-lock", async () => "unexpected")
     expect(blocked).toEqual({ acquired: false })
 
     await unlock?.()
 
-    const acquired = await contenderLocks.tryWithLock(
-      "nested-manual-lock",
-      async () => "success",
-    )
+    const acquired = await contenderLocks.tryWithLock("nested-manual-lock", async () => "success")
     expect(acquired).toEqual({ acquired: true, result: "success" })
   })
 })

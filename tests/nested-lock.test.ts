@@ -4,16 +4,12 @@ import { createAdvisoryLockManager } from "pg-advisory-lock"
 
 import { databaseUrl, sleep } from "#test-utils"
 
-const { createMutex, withLock, tryLock, tryWithLock } =
-  createAdvisoryLockManager(databaseUrl)
+const { createMutex, withLock, tryLock, tryWithLock } = createAdvisoryLockManager(databaseUrl)
 
 test("withLock > withLock with same key", async () => {
   const result = await withLock("nested-test", async () => {
     // This should reuse the same connection and not deadlock
-    const nestedResult = await withLock(
-      "nested-test",
-      async () => "nested-success",
-    )
+    const nestedResult = await withLock("nested-test", async () => "nested-success")
     return { outer: "success", nested: nestedResult }
   })
 
@@ -23,10 +19,7 @@ test("withLock > withLock with same key", async () => {
 test("withLock > tryWithLock with same key", async () => {
   const result = await withLock("nested-try-test", async () => {
     // This should reuse the same connection and succeed
-    const nestedResult = await tryWithLock(
-      "nested-try-test",
-      async () => "nested-success",
-    )
+    const nestedResult = await tryWithLock("nested-try-test", async () => "nested-success")
     return { outer: "success", nested: nestedResult }
   })
 
@@ -50,10 +43,7 @@ test("withLock > tryLock with same key", async () => {
 
 test("tryWithLock > tryWithLock with same key", async () => {
   const result = await tryWithLock("nested-try-test", async () => {
-    const nestedResult = await tryWithLock(
-      "nested-try-test",
-      async () => "nested-success",
-    )
+    const nestedResult = await tryWithLock("nested-try-test", async () => "nested-success")
     return { outer: "success", nested: nestedResult }
   })
 
@@ -89,10 +79,7 @@ test("mutex.withLock > withLock with same key", async () => {
   const mutex = createMutex("mixed-nested-test-2")
   const result = await mutex.withLock(async () => {
     // This should reuse the same connection and not deadlock
-    const nestedResult = await withLock(
-      "mixed-nested-test-2",
-      async () => "nested-success",
-    )
+    const nestedResult = await withLock("mixed-nested-test-2", async () => "nested-success")
     return { outer: "success", nested: nestedResult }
   })
 
@@ -163,13 +150,13 @@ test("concurrent withLock", async () => {
 
 test("concurrent tryLock", async () => {
   await Promise.all([
-    tryLock("concurrent-test").then(async (release) => {
+    tryLock("concurrent-test").then(async release => {
       expect(release).toBeDefined()
       await sleep(50)
       await release?.()
     }),
     sleep(10).then(() =>
-      tryLock("concurrent-test").then(async (release) => {
+      tryLock("concurrent-test").then(async release => {
         expect(release).toBeUndefined()
       }),
     ),

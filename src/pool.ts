@@ -121,9 +121,7 @@ export class NestingPool {
   close(): Promise<void> {
     if (this.activeConnectionContext()) {
       return Promise.reject(
-        new Error(
-          "Cannot close advisory lock manager from an active lock context",
-        ),
+        new Error("Cannot close advisory lock manager from an active lock context"),
       )
     }
 
@@ -135,7 +133,7 @@ export class NestingPool {
     this.closing = true
 
     if (this.activeConnections > 0) {
-      await new Promise<void>((resolve) => {
+      await new Promise<void>(resolve => {
         this.resolveIdle = resolve
       })
     }

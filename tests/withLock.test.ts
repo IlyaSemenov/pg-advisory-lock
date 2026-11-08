@@ -5,8 +5,7 @@ import { createAdvisoryLockManager } from "pg-advisory-lock"
 import { databaseUrl, sleep } from "#test-utils"
 
 const { createMutex, withLock } = createAdvisoryLockManager(databaseUrl)
-const { tryWithLock: independentlyTryWithLock } =
-  createAdvisoryLockManager(databaseUrl)
+const { tryWithLock: independentlyTryWithLock } = createAdvisoryLockManager(databaseUrl)
 
 describe("mutex.withLock", () => {
   it("executes function and releases lock", async () => {
@@ -31,10 +30,7 @@ describe("mutex.withLock", () => {
       }),
     ).rejects.toThrow("test error")
 
-    const result = await independentlyTryWithLock(
-      "test-lock",
-      async () => "success",
-    )
+    const result = await independentlyTryWithLock("test-lock", async () => "success")
     expect(result).toEqual({ acquired: true, result: "success" })
   })
 
@@ -127,10 +123,7 @@ describe("convenience withLock", () => {
       }),
     ).rejects.toThrow("test error")
 
-    const result = await independentlyTryWithLock(
-      "test-lock",
-      async () => "success",
-    )
+    const result = await independentlyTryWithLock("test-lock", async () => "success")
     expect(result).toEqual({ acquired: true, result: "success" })
   })
 

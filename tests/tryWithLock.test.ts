@@ -5,8 +5,7 @@ import { createAdvisoryLockManager } from "pg-advisory-lock"
 import { databaseUrl, sleep } from "#test-utils"
 
 const { createMutex, tryWithLock } = createAdvisoryLockManager(databaseUrl)
-const { tryWithLock: independentlyTryWithLock } =
-  createAdvisoryLockManager(databaseUrl)
+const { tryWithLock: independentlyTryWithLock } = createAdvisoryLockManager(databaseUrl)
 
 describe("mutex.tryWithLock", () => {
   it("executes function and returns result when lock is available", async () => {
@@ -53,10 +52,7 @@ describe("mutex.tryWithLock", () => {
       }),
     ).rejects.toThrow("test error")
 
-    const result = await independentlyTryWithLock(
-      "test-lock",
-      async () => "success",
-    )
+    const result = await independentlyTryWithLock("test-lock", async () => "success")
     expect(result).toEqual({ acquired: true, result: "success" })
   })
 
@@ -141,10 +137,7 @@ describe("convenience tryWithLock", () => {
       }),
     ).rejects.toThrow("test error")
 
-    const result = await independentlyTryWithLock(
-      "test-lock",
-      async () => "success",
-    )
+    const result = await independentlyTryWithLock("test-lock", async () => "success")
     expect(result).toEqual({ acquired: true, result: "success" })
   })
 
@@ -179,10 +172,7 @@ describe("convenience tryWithLock", () => {
     const arrayResult = await tryWithLock("test-lock", async () => [1, 2, 3])
     expect(arrayResult).toEqual({ acquired: true, result: [1, 2, 3] })
 
-    const undefinedResult = await tryWithLock(
-      "test-lock",
-      async () => undefined,
-    )
+    const undefinedResult = await tryWithLock("test-lock", async () => undefined)
     expect(undefinedResult).toEqual({ acquired: true, result: undefined })
   })
 })

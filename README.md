@@ -20,9 +20,7 @@ Create one manager and reuse it for the lifetime of the application:
 ```ts
 import { createAdvisoryLockManager } from "pg-advisory-lock"
 
-const locks = createAdvisoryLockManager(
-  "postgresql://user:pass@localhost/database",
-)
+const locks = createAdvisoryLockManager("postgresql://user:pass@localhost/database")
 
 await locks.withLock("db:migrate", async () => {
   await runMigrations()
@@ -63,10 +61,7 @@ Create a mutex when several call sites use the same logical name, or wrap a func
 const mutex = locks.createMutex("search:index")
 await mutex.withLock(rebuildSearchIndex)
 
-const rebuildExclusively = locks.wrapWithLock(
-  "search:index",
-  rebuildSearchIndex,
-)
+const rebuildExclusively = locks.wrapWithLock("search:index", rebuildSearchIndex)
 ```
 
 An `AdvisoryMutex` provides `withLock()`, `tryWithLock()`, `tryLock()`, and `wrapWithLock()`.
@@ -186,10 +181,7 @@ The async context therefore acts as one owner, including for sibling calls:
 
 ```ts
 await locks.withLock("resource", async () => {
-  await Promise.all([
-    locks.withLock("resource", task1),
-    locks.withLock("resource", task2),
-  ])
+  await Promise.all([locks.withLock("resource", task1), locks.withLock("resource", task2)])
 })
 ```
 
@@ -220,7 +212,7 @@ Use [`deriveAdvisoryLockKey()`](#lock-key-derivation) to take a transaction-leve
 ```ts
 const key = deriveAdvisoryLockKey("db:migrate")
 
-await sql.begin(async (sql) => {
+await sql.begin(async sql => {
   await sql`SELECT pg_advisory_xact_lock(${String(key)}::int8)`
   await migrate(sql)
 })

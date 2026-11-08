@@ -14,9 +14,7 @@ describe("deriveAdvisoryLockKey", () => {
 
   it("keeps derived keys stable", () => {
     expect(deriveAdvisoryLockKey("db:migrate")).toBe(3385325551285341936n)
-    expect(deriveAdvisoryLockKey("db:migrate", ["tenant-a", "jobs"])).toBe(
-      -1540740859457476831n,
-    )
+    expect(deriveAdvisoryLockKey("db:migrate", ["tenant-a", "jobs"])).toBe(-1540740859457476831n)
   })
 
   it("folds namespaces in call order", () => {
@@ -44,9 +42,7 @@ describe("resolveAdvisoryLockKey", () => {
 
   it("rejects keys outside the signed 64-bit range", () => {
     expect(() => resolveAdvisoryLockKey(2n ** 63n, [])).toThrow(RangeError)
-    expect(() => resolveAdvisoryLockKey(-(2n ** 63n) - 1n, [])).toThrow(
-      RangeError,
-    )
+    expect(() => resolveAdvisoryLockKey(-(2n ** 63n) - 1n, [])).toThrow(RangeError)
   })
 
   it("rejects raw keys in namespaces", () => {

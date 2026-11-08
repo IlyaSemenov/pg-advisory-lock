@@ -6,17 +6,16 @@ import { createAdvisoryMutex } from "./mutex"
 import { NestingPool } from "./pool"
 
 // Resolve the public postgres.js types as ESM so that the CommonJS declarations can reference the ESM-only postgres.js 4.
-type PostgresSql = import("postgres", { with: {
-  "resolution-mode": "import",
-}}).Sql
-type PostgresOptions = import("postgres", { with: {
-  "resolution-mode": "import",
-}}).Options<
-  Record<
-    string,
-    import("postgres", { with: { "resolution-mode": "import" }}).PostgresType
-  >
->
+type PostgresSql = import("postgres", {
+  with: {
+    "resolution-mode": "import",
+  },
+}).Sql
+type PostgresOptions = import("postgres", {
+  with: {
+    "resolution-mode": "import",
+  },
+}).Options<Record<string, import("postgres", { with: { "resolution-mode": "import" } }).PostgresType>>
 
 /**
  * The postgres.js factory.
@@ -37,10 +36,7 @@ export interface AdvisoryLockKeyspace<TName extends string | bigint = string> {
   /** Creates an isolated nested namespace within this keyspace. */
   namespace(value: string): AdvisoryLockKeyspace
   tryLock(name: TName): Promise<(() => Promise<void>) | undefined>
-  tryWithLock<T>(
-    name: TName,
-    fn: () => PromiseLike<T>,
-  ): Promise<TryWithLockResult<T>>
+  tryWithLock<T>(name: TName, fn: () => PromiseLike<T>): Promise<TryWithLockResult<T>>
   withLock<T>(name: TName, fn: () => PromiseLike<T>): Promise<T>
   wrapWithLock<TArgs extends readonly unknown[], TReturn>(
     name: TName,
@@ -52,8 +48,7 @@ export interface AdvisoryLockKeyspace<TName extends string | bigint = string> {
  * The root advisory lock manager, including ownership of its connection lifecycle.
  */
 export interface AdvisoryLockManager
-  extends AdvisoryLockKeyspace<string | bigint>,
-    AsyncDisposable {
+  extends AdvisoryLockKeyspace<string | bigint>, AsyncDisposable {
   /** Stops new acquisitions, waits for active locks, and closes owned connections. */
   close(): Promise<void>
 }
@@ -78,21 +73,16 @@ export function createAdvisoryLockManager(
         ? createPostgres(connection)
         : createPostgres(connection)
 
-  const pool = new NestingPool(
-    basePool,
-    ownsPool ? () => basePool.end() : undefined,
-  )
+  const pool = new NestingPool(basePool, ownsPool ? () => basePool.end() : undefined)
 
-  function createKeyspace(
-    namespaces: readonly string[],
-  ): AdvisoryLockKeyspace<string | bigint> {
+  function createKeyspace(namespaces: readonly string[]): AdvisoryLockKeyspace<string | bigint> {
     const createMutex = (name: string | bigint) =>
       createAdvisoryMutex(pool, resolveAdvisoryLockKey(name, namespaces))
 
     return {
       createMutex,
-      namespace: (value) => createKeyspace([...namespaces, value]),
-      tryLock: async (name) => createMutex(name).tryLock(),
+      namespace: value => createKeyspace([...namespaces, value]),
+      tryLock: async name => createMutex(name).tryLock(),
       tryWithLock: async (name, fn) => createMutex(name).tryWithLock(fn),
       withLock: async (name, fn) => createMutex(name).withLock(fn),
       wrapWithLock: (name, fn) => createMutex(name).wrapWithLock(fn),

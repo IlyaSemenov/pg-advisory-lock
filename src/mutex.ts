@@ -5,9 +5,7 @@ import type { NestingPool } from "./pool"
 /**
  * The discriminated result of a non-blocking lock attempt with a callback.
  */
-export type TryWithLockResult<T> =
-  | { acquired: false }
-  | { acquired: true; result: T }
+export type TryWithLockResult<T> = { acquired: false } | { acquired: true; result: T }
 
 /**
  * A reusable mutex bound to one PostgreSQL advisory lock key.
@@ -64,7 +62,7 @@ class PostgresAdvisoryMutex implements AdvisoryMutex {
    * Acquires the lock and executes the provided function.
    */
   async withLock<T>(fn: () => PromiseLike<T>): Promise<T> {
-    return await this.pool.withClient(async (client) => {
+    return await this.pool.withClient(async client => {
       await this.lock(client)
 
       try {
@@ -82,10 +80,8 @@ class PostgresAdvisoryMutex implements AdvisoryMutex {
    *  - `{ acquired: false }` if the lock is not available
    *  - `{ acquired: true, result: T }` if the lock was acquired and the function executed
    */
-  async tryWithLock<T>(
-    fn: () => PromiseLike<T>,
-  ): Promise<TryWithLockResult<T>> {
-    return await this.pool.withClient(async (client) => {
+  async tryWithLock<T>(fn: () => PromiseLike<T>): Promise<TryWithLockResult<T>> {
+    return await this.pool.withClient(async client => {
       if (await this.tryToLock(client)) {
         try {
           return { acquired: true, result: await fn() }
@@ -115,9 +111,7 @@ class PostgresAdvisoryMutex implements AdvisoryMutex {
           unlockPromise ??= (async () => {
             try {
               if (!(await this.unlock(client))) {
-                throw new Error(
-                  "Advisory lock is no longer held by its connection",
-                )
+                throw new Error("Advisory lock is no longer held by its connection")
               }
             } finally {
               release()
@@ -149,9 +143,6 @@ class PostgresAdvisoryMutex implements AdvisoryMutex {
 }
 
 /** Creates a mutex bound to a PostgreSQL advisory lock key. */
-export function createAdvisoryMutex(
-  pool: NestingPool,
-  key: bigint,
-): AdvisoryMutex {
+export function createAdvisoryMutex(pool: NestingPool, key: bigint): AdvisoryMutex {
   return new PostgresAdvisoryMutex(pool, key)
 }

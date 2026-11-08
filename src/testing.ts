@@ -44,7 +44,7 @@ class TestAdvisoryLockStateImplementation implements TestAdvisoryLockState {
       return
     }
 
-    await new Promise<void>((resolve) => {
+    await new Promise<void>(resolve => {
       held.waiters.push({ owner, resolve })
     })
   }
@@ -173,9 +173,7 @@ class TestManagerLifecycle {
   close(): Promise<void> {
     if (this.activeOwnerContext()) {
       return Promise.reject(
-        new Error(
-          "Cannot close advisory lock manager from an active lock context",
-        ),
+        new Error("Cannot close advisory lock manager from an active lock context"),
       )
     }
 
@@ -186,7 +184,7 @@ class TestManagerLifecycle {
   private async closeWhenIdle(): Promise<void> {
     this.closing = true
     if (this.activeOwners > 0) {
-      await new Promise<void>((resolve) => {
+      await new Promise<void>(resolve => {
         this.resolveIdle = resolve
       })
     }
@@ -201,7 +199,7 @@ class TestAdvisoryMutex implements AdvisoryMutex {
   ) {}
 
   async withLock<T>(fn: () => PromiseLike<T>): Promise<T> {
-    return await this.lifecycle.withOwner(async (owner) => {
+    return await this.lifecycle.withOwner(async owner => {
       await this.state.acquire(this.key, owner)
       try {
         return await fn()
@@ -211,10 +209,8 @@ class TestAdvisoryMutex implements AdvisoryMutex {
     })
   }
 
-  async tryWithLock<T>(
-    fn: () => PromiseLike<T>,
-  ): Promise<TryWithLockResult<T>> {
-    return await this.lifecycle.withOwner(async (owner) => {
+  async tryWithLock<T>(fn: () => PromiseLike<T>): Promise<TryWithLockResult<T>> {
+    return await this.lifecycle.withOwner(async owner => {
       if (!this.state.tryAcquire(this.key, owner)) return { acquired: false }
       try {
         return { acquired: true, result: await fn() }
@@ -266,9 +262,7 @@ export function createTestAdvisoryLockManager(
   options: CreateTestAdvisoryLockManagerOptions = {},
 ): AdvisoryLockManager {
   const state =
-    options.state === undefined
-      ? new TestAdvisoryLockStateImplementation()
-      : options.state
+    options.state === undefined ? new TestAdvisoryLockStateImplementation() : options.state
   if (!(state instanceof TestAdvisoryLockStateImplementation)) {
     throw new TypeError("state must be created by createTestAdvisoryLockState")
   }
@@ -276,9 +270,7 @@ export function createTestAdvisoryLockManager(
 
   const lifecycle = new TestManagerLifecycle()
 
-  function createKeyspace(
-    namespaces: readonly string[],
-  ): AdvisoryLockKeyspace<string | bigint> {
+  function createKeyspace(namespaces: readonly string[]): AdvisoryLockKeyspace<string | bigint> {
     const createMutex = (name: string | bigint) =>
       new TestAdvisoryMutex(
         stateImplementation,
@@ -288,8 +280,8 @@ export function createTestAdvisoryLockManager(
 
     return {
       createMutex,
-      namespace: (value) => createKeyspace([...namespaces, value]),
-      tryLock: async (name) => createMutex(name).tryLock(),
+      namespace: value => createKeyspace([...namespaces, value]),
+      tryLock: async name => createMutex(name).tryLock(),
       tryWithLock: async (name, fn) => createMutex(name).tryWithLock(fn),
       withLock: async (name, fn) => createMutex(name).withLock(fn),
       wrapWithLock: (name, fn) => createMutex(name).wrapWithLock(fn),

@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 
-import {
-  type AdvisoryLockManager,
-  createAdvisoryLockManager,
-} from "pg-advisory-lock"
+import { type AdvisoryLockManager, createAdvisoryLockManager } from "pg-advisory-lock"
 import postgres from "postgres"
 
 import { databaseUrl } from "#test-utils"
@@ -41,17 +38,13 @@ describe("namespace", () => {
     if (!unlock) throw new Error("Expected to acquire the lock")
 
     try {
-      expect(
-        await contenderLocks.namespace("tenant-a").tryLock("job:2"),
-      ).toBeUndefined()
+      expect(await contenderLocks.namespace("tenant-a").tryLock("job:2")).toBeUndefined()
     } finally {
       await unlock()
     }
 
     const wrapped = tenantLocks.wrapWithLock("job:3", async () =>
-      contenderLocks
-        .namespace("tenant-a")
-        .tryWithLock("job:3", async () => "unexpected"),
+      contenderLocks.namespace("tenant-a").tryWithLock("job:3", async () => "unexpected"),
     )
     expect(await wrapped()).toEqual({ acquired: false })
   })
@@ -78,7 +71,7 @@ describe("namespace", () => {
   it("shares one connection pool between namespaces", async () => {
     const connectionIds = new Set<number>()
     const sql = postgres(databaseUrl, {
-      debug: (connectionId) => {
+      debug: connectionId => {
         connectionIds.add(connectionId)
       },
       max: 1,

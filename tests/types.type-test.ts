@@ -78,38 +78,26 @@ describe("wrapWithLock type tests", () => {
       email?: string
     }
 
-    const originalFunction = async (
-      user: User,
-      action: "create" | "update",
-    ) => {
+    const originalFunction = async (user: User, action: "create" | "update") => {
       return { ...user, action, timestamp: new Date() }
     }
 
     const wrappedFunction = wrapWithLock("test", originalFunction)
 
     expectTypeOf(wrappedFunction).parameter(0).toMatchTypeOf<User>()
-    expectTypeOf(wrappedFunction)
-      .parameter(1)
-      .toEqualTypeOf<"create" | "update">()
-    expectTypeOf(wrappedFunction).toBeCallableWith(
-      { id: 1, name: "John" },
-      "create",
-    )
+    expectTypeOf(wrappedFunction).parameter(1).toEqualTypeOf<"create" | "update">()
+    expectTypeOf(wrappedFunction).toBeCallableWith({ id: 1, name: "John" }, "create")
   })
 
   test("should preserve union types", () => {
-    const originalFunction = async (
-      input: string | number,
-    ): Promise<string | number> => {
+    const originalFunction = async (input: string | number): Promise<string | number> => {
       return input
     }
 
     const wrappedFunction = wrapWithLock("test", originalFunction)
 
     expectTypeOf(wrappedFunction).parameter(0).toEqualTypeOf<string | number>()
-    expectTypeOf(wrappedFunction).returns.toEqualTypeOf<
-      Promise<string | number>
-    >()
+    expectTypeOf(wrappedFunction).returns.toEqualTypeOf<Promise<string | number>>()
   })
 
   test("should reject invalid parameter types", () => {
@@ -183,9 +171,7 @@ describe("createAdvisoryLockManager return type tests", () => {
     expectTypeOf(result).toMatchTypeOf<AsyncDisposable>()
     expectTypeOf(result).toHaveProperty("wrapWithLock")
     expectTypeOf(result.wrapWithLock).toBeFunction()
-    expectTypeOf(result.wrapWithLock)
-      .parameter(0)
-      .toEqualTypeOf<string | bigint>()
+    expectTypeOf(result.wrapWithLock).parameter(0).toEqualTypeOf<string | bigint>()
     expectTypeOf(result.wrapWithLock).parameter(1).toBeFunction()
     expectTypeOf(result.wrapWithLock).returns.toBeFunction()
   })
@@ -221,12 +207,8 @@ describe("createTestAdvisoryLockManager return type tests", () => {
   test("matches the manager contract with isolated or shared state", () => {
     const state = createTestAdvisoryLockState()
 
-    expectTypeOf(
-      createTestAdvisoryLockManager(),
-    ).toEqualTypeOf<AdvisoryLockManager>()
-    expectTypeOf(
-      createTestAdvisoryLockManager({ state }),
-    ).toEqualTypeOf<AdvisoryLockManager>()
+    expectTypeOf(createTestAdvisoryLockManager()).toEqualTypeOf<AdvisoryLockManager>()
+    expectTypeOf(createTestAdvisoryLockManager({ state })).toEqualTypeOf<AdvisoryLockManager>()
   })
 })
 
@@ -238,9 +220,7 @@ describe("type assignability tests", () => {
     const wrappedFunction = wrapWithLock("test", originalFunction)
 
     // These should pass
-    expectTypeOf(wrappedFunction).toEqualTypeOf<
-      (x: number) => Promise<number>
-    >()
+    expectTypeOf(wrappedFunction).toEqualTypeOf<(x: number) => Promise<number>>()
 
     // @ts-expect-error wrong return type
     const wrongReturn: (x: number) => Promise<string> = wrappedFunction

@@ -75,8 +75,6 @@ describe("lock keys", () => {
   })
 
   it("rejects keys outside the signed 64-bit range", async () => {
-    await expect(locks.withLock(2n ** 63n, async () => {})).rejects.toThrow(
-      RangeError,
-    )
+    await expect(locks.withLock(2n ** 63n, async () => {})).rejects.toThrow(RangeError)
   })
 })
