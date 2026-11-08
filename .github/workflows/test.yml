@@ -11,12 +11,18 @@ permissions:
 
 jobs:
   test:
-    name: Test
+    name: Test (PostgreSQL ${{ matrix.postgres }})
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # The minimum supported version from README and the latest release.
+        postgres: ["15", "latest"]
 
     services:
       postgres:
-        image: postgres:14
+        image: postgres:${{ matrix.postgres }}
         env:
           POSTGRES_PASSWORD: postgres
         # Wait until postgres is ready before test steps run.

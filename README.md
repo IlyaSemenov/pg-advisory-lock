@@ -9,7 +9,7 @@ It is useful when the protected work includes external I/O, non-transactional op
 npm install pg-advisory-lock postgres
 ```
 
-Node.js 22.12 or newer and PostgreSQL 14 or newer are required.
+Node.js 22.12 or newer and PostgreSQL 15 or newer are required.
 Use a direct connection or [PgBouncer session pooling](https://www.pgbouncer.org/features.html).
 PgBouncer transaction and statement pooling are unsupported.
 
