@@ -1,5 +1,12 @@
 # pg-advisory-lock
 
+## 5.0.0
+
+### Major Changes
+
+- 1e3ea91: Publish the package as ESM only and require Node.js 22.12 or newer, which loads it from CommonJS through `require()`.
+- 3af17fe: Require PostgreSQL 15 or newer.
+
 ## 4.0.0
 
 ### Major Changes

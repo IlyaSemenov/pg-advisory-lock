@@ -1,6 +1,6 @@
 {
   "name": "pg-advisory-lock",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "description": "Coordinate exclusive work across application instances with PostgreSQL session-level advisory locks.",
   "homepage": "https://github.com/IlyaSemenov/pg-advisory-lock#readme",
   "bugs": "https://github.com/IlyaSemenov/pg-advisory-lock/issues",
