@@ -1,8 +1,4 @@
-name: Test and Release
-
-env:
-  # Keep in sync with .changeset/config.json:baseBranch
-  MAIN_REF: refs/heads/main
+name: Test
 
 on:
   push:
@@ -10,15 +6,12 @@ on:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
-# Publish to npm with OIDC
 permissions:
-  contents: write
-  pull-requests: write
-  id-token: write
+  contents: read
 
 jobs:
-  test-and-release:
-    name: Test and Release
+  test:
+    name: Test
     runs-on: ubuntu-latest
 
     services:
@@ -44,12 +37,6 @@ jobs:
         uses: jdx/mise-action@v5
         with:
           version: 2026.11.4
-
-      # for npx publish
-      - name: Setup Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24
 
       - name: Install deps
         run: bun install --frozen-lockfile
@@ -95,10 +82,11 @@ jobs:
           node -e 'require("pg-advisory-lock").createAdvisoryLockManager("postgres://localhost").close()'
           node --unhandled-rejections=strict --input-type=module -e 'const { createAdvisoryLockManager } = await import("pg-advisory-lock"); await createAdvisoryLockManager("postgres://localhost").close()'
 
-      - name: Restore release Node
+      # Keep in sync with mise.toml:node
+      - name: Restore Node
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
 
       - name: Typecheck package declarations
         run: |
@@ -120,25 +108,3 @@ jobs:
           bun run test
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost
-
-      - name: Restore locked dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Capture release version
-        if: ${{ github.ref == env.MAIN_REF }}
-        run: |
-          npx @changesets/cli status --output=release.json
-          RELEASE_VERSION="$(jq -r '.releases[0].newVersion // empty' release.json)"
-          if [ -z "$RELEASE_VERSION" ]; then
-            RELEASE_VERSION="$(jq -r '.version' package.json)"
-          fi
-          echo "RELEASE=Version $RELEASE_VERSION" >> "$GITHUB_ENV"
-          rm release.json
-
-      - name: Create Release Pull Request or Publish to npm
-        if: ${{ github.ref == env.MAIN_REF }}
-        uses: changesets/action@v2.1.2
-        with:
-          publish-script: npx changeset publish
-          pr-title: ${{ env.RELEASE }}
-          commit-message: ${{ env.RELEASE }}
