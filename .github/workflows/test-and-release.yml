@@ -43,7 +43,7 @@ jobs:
       - name: Setup mise
         uses: jdx/mise-action@v5
         with:
-          version: 2026.10.25
+          version: 2026.11.4
 
       # for npx publish
       - name: Setup Node
