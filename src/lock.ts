@@ -1,3 +1,4 @@
+import type { Options, PostgresType, Sql } from "postgres"
 import postgres from "postgres"
 
 import { resolveAdvisoryLockKey } from "./key"
@@ -5,25 +6,7 @@ import type { AdvisoryMutex, TryWithLockResult } from "./mutex"
 import { createAdvisoryMutex } from "./mutex"
 import { NestingPool } from "./pool"
 
-// Resolve the public postgres.js types as ESM so that the CommonJS declarations can reference the ESM-only postgres.js 4.
-type PostgresSql = import("postgres", {
-  with: {
-    "resolution-mode": "import",
-  },
-}).Sql
-type PostgresOptions = import("postgres", {
-  with: {
-    "resolution-mode": "import",
-  },
-}).Options<Record<string, import("postgres", { with: { "resolution-mode": "import" } }).PostgresType>>
-
-/**
- * The postgres.js factory.
- *
- * The CommonJS build receives the ES module namespace of postgres.js 4 as its default import, so the factory is unwrapped from it.
- */
-const createPostgres: typeof postgres =
-  (postgres as { default?: typeof postgres }).default ?? postgres
+type PostgresOptions = Options<Record<string, PostgresType>>
 
 /**
  * A configured mapping from logical lock names to PostgreSQL advisory keys.
@@ -63,15 +46,15 @@ export interface AdvisoryLockManager
  * @returns The root lock manager with namespaced operations and lifecycle control.
  */
 export function createAdvisoryLockManager(
-  connection: string | PostgresOptions | PostgresSql,
+  connection: string | PostgresOptions | Sql,
 ): AdvisoryLockManager {
   const ownsPool = typeof connection !== "function"
   const basePool =
     typeof connection === "function"
       ? connection
       : typeof connection === "string"
-        ? createPostgres(connection)
-        : createPostgres(connection)
+        ? postgres(connection)
+        : postgres(connection)
 
   const pool = new NestingPool(basePool, ownsPool ? () => basePool.end() : undefined)
 

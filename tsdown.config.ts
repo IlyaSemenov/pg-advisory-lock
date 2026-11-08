@@ -5,16 +5,11 @@ export default defineConfig({
     index: "src/index.ts",
     testing: "src/testing.ts",
   },
-  format: ["cjs", "esm"],
+  format: "esm",
   dts: true,
   exports: true,
-  nodeProtocol: "strip",
-  treeshake: {
-    // Remove leftover bare postgres.js imports so CommonJS declarations type-check with postgres.js 4 in node16 mode.
-    moduleSideEffects: "no-external",
-  },
   publint: true,
   attw: {
-    profile: "strict",
+    profile: "esm-only",
   },
 })

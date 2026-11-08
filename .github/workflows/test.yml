@@ -53,10 +53,12 @@ jobs:
           PACKAGE_TARBALL="$(npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP/package")"
           echo "PACKAGE_TARBALL=$RUNNER_TEMP/package/$PACKAGE_TARBALL" >> "$GITHUB_ENV"
 
+      # Keep in sync with package.json:engines.node
+      # The smoke tests call require() to check CommonJS consumers, which load the package through require(esm).
       - name: Setup minimum Node
         uses: actions/setup-node@v7
         with:
-          node-version: 18.18.0
+          node-version: 22.12.0
 
       - name: Smoke test package on minimum Node with postgres.js 3
         run: |
@@ -66,12 +68,6 @@ jobs:
           npm install --ignore-scripts "$PACKAGE_TARBALL" postgres@3
           node -e 'require("pg-advisory-lock").createAdvisoryLockManager("postgres://localhost").close()'
           node --unhandled-rejections=strict --input-type=module -e 'const { createAdvisoryLockManager } = await import("pg-advisory-lock"); await createAdvisoryLockManager("postgres://localhost").close()'
-
-      # postgres.js 4 is ESM-only, and require() loads ESM starting with Node.js 20.19.
-      - name: Setup minimum Node for postgres.js 4
-        uses: actions/setup-node@v7
-        with:
-          node-version: 20.19.0
 
       - name: Smoke test package on minimum Node with postgres.js 4
         run: |

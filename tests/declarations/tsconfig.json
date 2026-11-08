@@ -6,5 +6,5 @@
     "strict": true,
     "types": ["node"]
   },
-  "files": ["consumer.type-test.cts", "consumer.type-test.mts"]
+  "files": ["consumer.type-test.mts"]
 }
